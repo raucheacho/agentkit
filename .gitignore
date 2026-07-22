@@ -1,0 +1,22 @@
+# Binaries / build
+*.exe
+*.dll
+*.so
+*.dylib
+build/
+dist/
+
+# Test
+*.test
+*.out
+*.log
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Databases
+*.db
+*.sqlite
