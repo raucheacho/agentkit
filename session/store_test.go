@@ -9,7 +9,7 @@ import (
 	"github.com/raucheacho/agentkit/llm"
 )
 
-func newTestStore(t *testing.T) *Store {
+func newTestStore(t *testing.T) *SQLiteStore {
 	t.Helper()
 	db, err := store.Open(filepath.Join(t.TempDir(), "agent.db"))
 	if err != nil {
@@ -17,9 +17,9 @@ func newTestStore(t *testing.T) *Store {
 	}
 	t.Cleanup(func() { db.Close() })
 
-	s, err := NewStore(db)
+	s, err := NewSQLiteStore(db)
 	if err != nil {
-		t.Fatalf("NewStore: %v", err)
+		t.Fatalf("NewSQLiteStore: %v", err)
 	}
 	return s
 }

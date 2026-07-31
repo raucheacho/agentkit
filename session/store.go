@@ -15,14 +15,14 @@ import (
 // maxHistory bounds how many messages are kept per conversation.
 const maxHistory = 20
 
-// Store persists conversation history, one row per session key (channel:chatID).
+// SQLiteStore persists conversation history, one row per session key (channel:chatID).
 // It shares its *sql.DB with the app's other stores (see pkg/store.Open).
-type Store struct {
+type SQLiteStore struct {
 	db *sql.DB
 }
 
-// NewStore creates the sessions table if needed on the shared db.
-func NewStore(db *sql.DB) (*Store, error) {
+// NewSQLiteStore creates the sessions table if needed on the shared db.
+func NewSQLiteStore(db *sql.DB) (*SQLiteStore, error) {
 	if _, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS sessions (
 			key        TEXT PRIMARY KEY,
@@ -33,11 +33,11 @@ func NewStore(db *sql.DB) (*Store, error) {
 		return nil, fmt.Errorf("create sessions table: %w", err)
 	}
 
-	return &Store{db: db}, nil
+	return &SQLiteStore{db: db}, nil
 }
 
 // Get returns the message history for a session key, or nil if none exists yet.
-func (s *Store) Get(key string) ([]llm.Message, error) {
+func (s *SQLiteStore) Get(key string) ([]llm.Message, error) {
 	var raw string
 	err := s.db.QueryRow(`SELECT messages FROM sessions WHERE key = ?`, key).Scan(&raw)
 	if err == sql.ErrNoRows {
@@ -56,7 +56,7 @@ func (s *Store) Get(key string) ([]llm.Message, error) {
 
 // Save persists the message history for a session key, truncating it to the
 // most recent messages.
-func (s *Store) Save(key string, messages []llm.Message) error {
+func (s *SQLiteStore) Save(key string, messages []llm.Message) error {
 	if len(messages) > maxHistory {
 		messages = messages[len(messages)-maxHistory:]
 	}

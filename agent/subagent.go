@@ -144,7 +144,8 @@ func (sm *SubagentManager) runSubagent(task *SubagentTask, originChannel string,
 	log.Info().Str("task_id", task.ID).Msg("Subagent started")
 
 	// Créer les outils pour le subagent (sans spawn et sans message)
-	toolMgr := tools.NewToolManager(sm.workspace)
+	toolMgr := tools.NewManager()
+	_ = toolMgr.Register(&tools.GetTodayTool{})
 	toolMgr.DisableTool("spawn")   // Un subagent ne peut pas créer d'autres subagents
 	toolMgr.DisableTool("message") // Un subagent ne peut pas envoyer de messages directement
 
@@ -423,7 +424,7 @@ func (sm *SubagentManager) ClearNotifications() {
 // convertTools convertit les outils internes au format provider
 // (partagé avec Agent.convertTools, cf. agent.go)
 func (sm *SubagentManager) convertTools(toolDefs []tools.ToolDef) []llm.Tool {
-	return convertToolDefs(toolDefs)
+	return convertToolDefs(toolDefs, nil)
 }
 
 // SaveTasksToFile sauvegarde les tâches dans un fichier JSON

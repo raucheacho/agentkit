@@ -11,16 +11,21 @@ import (
 	"github.com/raucheacho/agentkit/bootstrap"
 	"github.com/raucheacho/agentkit/bus"
 	"github.com/raucheacho/agentkit/llm"
-	"github.com/raucheacho/agentkit/session"
 	"github.com/raucheacho/agentkit/tools"
 )
+
+// SessionStore interface for conversation persistence
+type SessionStore interface {
+	Get(key string) ([]llm.Message, error)
+	Save(key string, messages []llm.Message) error
+}
 
 // Config configuration de l'agent. Le runtime est générique : tout ce qui
 // est spécifique à une application (tools métier, persona, instructions)
 // est injecté ici par l'assemblage (cmd/), jamais importé par ce package.
 type Config struct {
 	Provider     llm.Provider
-	SessionStore *session.Store
+	SessionStore SessionStore
 
 	// Tools est le manager d'outils, déjà garni des tools métier par
 	// l'application appelante. Si nil, un manager avec les seuls tools
@@ -38,6 +43,16 @@ type Config struct {
 	MaxIter              int
 	Bus                  *bus.Bus // Message bus pour les subagents
 	SubagentsMaxParallel int
+
+	// Crochets d'interception d'outils
+	BeforeTool func(ctx context.Context, call llm.ToolCall) (allow bool, reason string)
+	AfterTool  func(ctx context.Context, call llm.ToolCall, result string)
+
+	// Filtrage d'outils actifs
+	EnabledTools map[string]bool
+
+	// Composition du prompt système
+	ExtraPrompt func() string
 }
 
 // Valeurs par défaut quand Identity/Instructions ne sont pas fournis.
@@ -80,7 +95,8 @@ func New(cfg Config) *Agent {
 
 	toolMgr := cfg.Tools
 	if toolMgr == nil {
-		toolMgr = tools.NewToolManager(cfg.Workspace)
+		toolMgr = tools.NewManager()
+		_ = toolMgr.Register(&tools.GetTodayTool{})
 		log.Warn().Msg("Aucun tool manager fourni : seuls les tools génériques sont disponibles")
 	}
 
@@ -100,10 +116,10 @@ func New(cfg Config) *Agent {
 		agent.subagents = NewSubagentManager(cfg.Provider, cfg.Workspace, cfg.Bus, "", maxParallel)
 		agent.subagents.LoadTasksFromFile()
 
-		// Enregistrer l'outil spawn avec une fonction wrapper
-		toolMgr.RegisterSpawnTool(func(task, label, originChannel, originChatID string) (string, error) {
+		// Enregistrer l'outil spawn
+		_ = toolMgr.Register(tools.NewSpawnTool(func(task, label, originChannel, originChatID string) (string, error) {
 			return agent.subagents.Spawn(task, label, originChannel, originChatID)
-		})
+		}))
 	}
 
 	return agent
@@ -175,6 +191,20 @@ func (a *Agent) process(ctx context.Context, msg *bus.InboundMessage, sessionKey
 		for _, tc := range resp.ToolCalls {
 			log.Info().Str("tool", tc.Function.Name).Msg("Exécution outil")
 
+			// Interception avant outil
+			if a.config.BeforeTool != nil {
+				allow, reason := a.config.BeforeTool(ctx, tc)
+				if !allow {
+					log.Warn().Str("tool", tc.Function.Name).Str("reason", reason).Msg("Outil refusé par BeforeTool")
+					messages = append(messages, llm.Message{
+						Role:       "tool",
+						Content:    fmt.Sprintf("Erreur: exécution refusée (%s)", reason),
+						ToolCallID: tc.ID,
+					})
+					continue
+				}
+			}
+
 			var args map[string]interface{}
 			if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
 				log.Error().Err(err).Msg("Erreur parsing arguments")
@@ -189,6 +219,11 @@ func (a *Agent) process(ctx context.Context, msg *bus.InboundMessage, sessionKey
 			result, err := a.executeTool(ctx, tc.Function.Name, args)
 			if err != nil {
 				result = fmt.Sprintf("Erreur: %s", err)
+			}
+
+			// Interception après outil
+			if a.config.AfterTool != nil && err == nil {
+				a.config.AfterTool(ctx, tc, result)
 			}
 
 			// Le spawn renvoie immédiatement une confirmation à l'utilisateur ;
@@ -301,6 +336,12 @@ func (a *Agent) buildSystemPrompt() string {
 		parts = append(parts, bootstrapCtx)
 	}
 
+	if a.config.ExtraPrompt != nil {
+		if extra := a.config.ExtraPrompt(); extra != "" {
+			parts = append(parts, extra)
+		}
+	}
+
 	parts = append(parts, fmt.Sprintf("%s\n\nHeure actuelle: %s",
 		a.config.Instructions, time.Now().Format("2006-01-02 15:04:05")))
 
@@ -315,13 +356,19 @@ func (a *Agent) executeTool(ctx context.Context, name string, args map[string]in
 // convertTools convertit les outils internes au format provider
 // (partagé avec SubagentManager.convertTools, cf. subagent.go)
 func (a *Agent) convertTools(toolDefs []tools.ToolDef) []llm.Tool {
-	return convertToolDefs(toolDefs)
+	return convertToolDefs(toolDefs, a.config.EnabledTools)
 }
 
 // convertToolDefs convertit les outils internes au format provider.
-func convertToolDefs(toolDefs []tools.ToolDef) []llm.Tool {
+func convertToolDefs(toolDefs []tools.ToolDef, enabledTools map[string]bool) []llm.Tool {
 	var result []llm.Tool
 	for _, t := range toolDefs {
+		if enabledTools != nil {
+			if enabled, ok := enabledTools[t.Function.Name]; ok && !enabled {
+				continue // Outil désactivé
+			}
+		}
+
 		result = append(result, llm.Tool{
 			Type: t.Type,
 			Function: llm.FunctionDef{
