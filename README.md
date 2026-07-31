@@ -64,6 +64,11 @@ ag := agent.New(agent.Config{
         // Ex: Injecter les skills actifs, la data utilisateur dans le prompt système
         return ""
     },
+    EnabledTools: func(name string) bool {
+        // Ex: Désactiver certains outils dynamiquement selon le contexte
+        return true
+    },
+    ParseInlineTools: true, // Recommandé si le modèle a du mal avec les appels d'outils natifs
 })
 
 // 4. Un canal (ex: WhatsApp via wotp) + la boucle de dispatch

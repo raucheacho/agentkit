@@ -48,8 +48,11 @@ type Config struct {
 	BeforeTool func(ctx context.Context, call llm.ToolCall) (allow bool, reason string)
 	AfterTool  func(ctx context.Context, call llm.ToolCall, result string)
 
-	// Filtrage d'outils actifs
-	EnabledTools map[string]bool
+	// Filtrage d'outils actifs (nil = tous)
+	EnabledTools func(name string) bool
+
+	// ParseInlineTools si le modèle émet l'appel d'outil en TEXTE (petits modèles)
+	ParseInlineTools bool
 
 	// Composition du prompt système
 	ExtraPrompt func() string
@@ -175,8 +178,15 @@ func (a *Agent) process(ctx context.Context, msg *bus.InboundMessage, sessionKey
 		}
 
 		if len(resp.ToolCalls) == 0 {
-			finalContent = resp.Content
-			break
+			if a.config.ParseInlineTools {
+				if tc, ok := a.parseInlineToolCall(resp.Content); ok {
+					resp.ToolCalls = []llm.ToolCall{*tc}
+				}
+			}
+			if len(resp.ToolCalls) == 0 {
+				finalContent = resp.Content
+				break
+			}
 		}
 
 		// L'assistant a appelé des tools : conserver tool_calls dans l'historique,
@@ -360,13 +370,11 @@ func (a *Agent) convertTools(toolDefs []tools.ToolDef) []llm.Tool {
 }
 
 // convertToolDefs convertit les outils internes au format provider.
-func convertToolDefs(toolDefs []tools.ToolDef, enabledTools map[string]bool) []llm.Tool {
+func convertToolDefs(toolDefs []tools.ToolDef, enabledTools func(name string) bool) []llm.Tool {
 	var result []llm.Tool
 	for _, t := range toolDefs {
-		if enabledTools != nil {
-			if enabled, ok := enabledTools[t.Function.Name]; ok && !enabled {
-				continue // Outil désactivé
-			}
+		if enabledTools != nil && !enabledTools(t.Function.Name) {
+			continue // Outil désactivé pour ce tour
 		}
 
 		result = append(result, llm.Tool{
@@ -406,3 +414,49 @@ func (a *Agent) UpdateModel(model string) {
 		}
 	}
 }
+
+// parseInlineToolCall parse un outil écrit en texte dans la réponse
+func (a *Agent) parseInlineToolCall(content string) (*llm.ToolCall, bool) {
+	s := strings.TrimSpace(content)
+	s = strings.TrimPrefix(s, "```json")
+	s = strings.TrimPrefix(s, "```")
+	s = strings.TrimSuffix(s, "```")
+	s = strings.TrimSpace(s)
+	i, j := strings.Index(s, "{"), strings.LastIndex(s, "}")
+	if i < 0 || j <= i {
+		return nil, false
+	}
+	var raw map[string]json.RawMessage
+	if json.Unmarshal([]byte(s[i:j+1]), &raw) != nil {
+		return nil, false
+	}
+	nameRaw, ok := raw["name"]
+	if !ok {
+		return nil, false
+	}
+	var name string
+	if json.Unmarshal(nameRaw, &name) != nil || name == "" {
+		return nil, false
+	}
+	known := false
+	for _, t := range a.tools.GetTools() {
+		if t.Function.Name == name {
+			known = true
+			break
+		}
+	}
+	if !known {
+		return nil, false
+	}
+	argsRaw := json.RawMessage("{}")
+	if v, ok := raw["parameters"]; ok {
+		argsRaw = v
+	} else if v, ok := raw["arguments"]; ok {
+		argsRaw = v
+	}
+	tc := &llm.ToolCall{Type: "function"}
+	tc.Function.Name = name
+	tc.Function.Arguments = string(argsRaw)
+	return tc, true
+}
+
