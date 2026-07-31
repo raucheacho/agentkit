@@ -12,7 +12,7 @@ La lib est **agnostique du métier** : elle fournit la boucle d'agent, le bus de
 | `tools` | Registre/manager d'outils (défs JSON Schema, exécution, `ConversationContext`) |
 | `bus` | Bus de messages entrants/sortants entre canaux et agent |
 | `channels` | Interface `Channel` + transport WhatsApp via wotp (webhook entrant, REST sortant) |
-| `session` | Historique de conversation persisté en SQLite, safe en concurrence |
+| `session` | Fournit `SQLiteStore`, une implémentation de `agent.SessionStore` persistée en SQLite |
 | `store` | Ouverture de la base SQLite partagée (WAL) |
 | `llm` | Interface `Provider` + implémentation Groq (API compatible OpenAI) |
 | `server` | Serveur HTTP : API admin (statut/modèle) + montage de webhooks |
@@ -34,23 +34,36 @@ import (
 
 // 1. Infra générique
 db, _ := store.Open("agent.db")
-sessions, _ := session.NewStore(db)
+sessions, _ := session.NewSQLiteStore(db)
 provider := llm.NewGroqProvider(llm.Config{APIKey: apiKey, Model: model})
 messageBus := bus.New()
 
 // 2. Vos tools métier (c'est ici que vit votre application)
-toolMgr := tools.NewToolManager(workspaceDir)
-toolMgr.RegisterTool(tools.ToolDef{ /* nom, description, schéma */ }, monExecuteur)
+toolMgr := tools.NewManager()
+toolMgr.Register(&MonOutilMetier{}) // Outil implémentant l'interface tools.Tool
 
 // 3. L'agent : persona et instructions injectées, jamais codées dans la lib
 ag := agent.New(agent.Config{
     Provider:     provider,
-    SessionStore: sessions,
+    SessionStore: sessions, // L'application injecte sa propre persistance si besoin
     Tools:        toolMgr,
     Identity:     "# Mon Assistant\n\nTu es …",
     Instructions: "## Instructions\n\n…",
     Workspace:    workspaceDir,
     Bus:          messageBus,
+    
+    // NOUVEAU v0.1.1 : Crochets métiers
+    BeforeTool: func(ctx context.Context, call llm.ToolCall) (bool, string) {
+        // Ex: Demander validation humaine, appliquer un garde-fou...
+        return true, ""
+    },
+    AfterTool: func(ctx context.Context, call llm.ToolCall, result string) {
+        // Ex: Télémétrie, workflows d'automatisation
+    },
+    ExtraPrompt: func() string {
+        // Ex: Injecter les skills actifs, la data utilisateur dans le prompt système
+        return ""
+    },
 })
 
 // 4. Un canal (ex: WhatsApp via wotp) + la boucle de dispatch
