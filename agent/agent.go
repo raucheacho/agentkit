@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rs/zerolog/log"
 	"github.com/raucheacho/agentkit/bootstrap"
 	"github.com/raucheacho/agentkit/bus"
 	"github.com/raucheacho/agentkit/llm"
 	"github.com/raucheacho/agentkit/tools"
+	"github.com/rs/zerolog/log"
 )
 
 // SessionStore interface for conversation persistence
@@ -56,6 +56,14 @@ type Config struct {
 
 	// Composition du prompt système
 	ExtraPrompt func() string
+
+	// MaxToolResultChars borne la taille d'un résultat d'outil renvoyé au
+	// modèle (début et fin conservés). 0 = 12000.
+	MaxToolResultChars int
+
+	// FallbackReply : réponse envoyée quand le modèle ne produit aucune
+	// réponse exploitable, même après la réponse finale forcée.
+	FallbackReply string
 }
 
 // Valeurs par défaut quand Identity/Instructions ne sont pas fournis.
@@ -89,6 +97,12 @@ func New(cfg Config) *Agent {
 	}
 	if cfg.Instructions == "" {
 		cfg.Instructions = defaultInstructions
+	}
+	if cfg.MaxToolResultChars == 0 {
+		cfg.MaxToolResultChars = defaultMaxToolResultChars
+	}
+	if cfg.FallbackReply == "" {
+		cfg.FallbackReply = defaultFallbackReply
 	}
 
 	// S'assurer que les fichiers bootstrap existent
@@ -148,136 +162,6 @@ func (a *Agent) ProcessMessage(ctx context.Context, msg *bus.InboundMessage) (*b
 	return a.process(ctx, msg, sessionKey)
 }
 
-func (a *Agent) process(ctx context.Context, msg *bus.InboundMessage, sessionKey string) (*bus.OutboundMessage, error) {
-	systemPrompt := a.buildSystemPrompt()
-
-	history, err := a.config.SessionStore.Get(sessionKey)
-	if err != nil {
-		log.Warn().Err(err).Str("session", sessionKey).Msg("Erreur lecture session, on repart de zéro")
-	}
-
-	// Porter l'identité de la conversation (channel + chat ID — pour
-	// WhatsApp, chat ID est le numéro de téléphone) via le contexte plutôt
-	// qu'un champ partagé : voir tools.ConversationContext pour le pourquoi.
-	ctx = tools.WithConversationContext(ctx, tools.ConversationContext{Channel: msg.Channel, ChatID: msg.ChatID})
-
-	var messages []llm.Message
-	messages = append(messages, llm.Message{Role: "system", Content: systemPrompt})
-	messages = append(messages, history...)
-	messages = append(messages, llm.Message{Role: "user", Content: msg.Content})
-
-	var finalContent string
-	iterations := 0
-
-	for iterations < a.config.MaxIter {
-		iterations++
-
-		resp, err := a.config.Provider.Chat(ctx, messages, a.convertTools(a.tools.GetTools()))
-		if err != nil {
-			return nil, fmt.Errorf("erreur LLM: %w", err)
-		}
-
-		if len(resp.ToolCalls) == 0 {
-			if a.config.ParseInlineTools {
-				if tc, ok := a.parseInlineToolCall(resp.Content); ok {
-					resp.ToolCalls = []llm.ToolCall{*tc}
-				}
-			}
-			if len(resp.ToolCalls) == 0 {
-				finalContent = resp.Content
-				break
-			}
-		}
-
-		// L'assistant a appelé des tools : conserver tool_calls dans l'historique,
-		// requis par les API compatibles OpenAI (Groq) pour rattacher les
-		// réponses "tool" qui suivent.
-		messages = append(messages, llm.Message{
-			Role:      "assistant",
-			Content:   resp.Content,
-			ToolCalls: resp.ToolCalls,
-		})
-
-		for _, tc := range resp.ToolCalls {
-			log.Info().Str("tool", tc.Function.Name).Msg("Exécution outil")
-
-			// Interception avant outil
-			if a.config.BeforeTool != nil {
-				allow, reason := a.config.BeforeTool(ctx, tc)
-				if !allow {
-					log.Warn().Str("tool", tc.Function.Name).Str("reason", reason).Msg("Outil refusé par BeforeTool")
-					messages = append(messages, llm.Message{
-						Role:       "tool",
-						Content:    fmt.Sprintf("Erreur: exécution refusée (%s)", reason),
-						ToolCallID: tc.ID,
-					})
-					continue
-				}
-			}
-
-			var args map[string]interface{}
-			if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
-				log.Error().Err(err).Msg("Erreur parsing arguments")
-				messages = append(messages, llm.Message{
-					Role:       "tool",
-					Content:    fmt.Sprintf("Erreur: arguments invalides (%s)", err),
-					ToolCallID: tc.ID,
-				})
-				continue
-			}
-
-			result, err := a.executeTool(ctx, tc.Function.Name, args)
-			if err != nil {
-				result = fmt.Sprintf("Erreur: %s", err)
-			}
-
-			// Interception après outil
-			if a.config.AfterTool != nil && err == nil {
-				a.config.AfterTool(ctx, tc, result)
-			}
-
-			// Le spawn renvoie immédiatement une confirmation à l'utilisateur ;
-			// le vrai résultat arrivera plus tard via processSubagentResult.
-			if tc.Function.Name == "spawn" && err == nil {
-				finalContent = result
-				a.persist(sessionKey, msg.Content, finalContent)
-				return &bus.OutboundMessage{Channel: msg.Channel, ChatID: msg.ChatID, Content: finalContent}, nil
-			}
-
-			messages = append(messages, llm.Message{
-				Role:       "tool",
-				Content:    result,
-				ToolCallID: tc.ID,
-			})
-		}
-	}
-
-	if finalContent == "" {
-		finalContent = "J'ai traité votre demande mais n'ai pas de réponse spécifique."
-	}
-
-	a.persist(sessionKey, msg.Content, finalContent)
-
-	return &bus.OutboundMessage{Channel: msg.Channel, ChatID: msg.ChatID, Content: finalContent}, nil
-}
-
-// persist ajoute l'échange à l'historique de la conversation et le sauvegarde.
-func (a *Agent) persist(sessionKey, userContent, assistantContent string) {
-	history, err := a.config.SessionStore.Get(sessionKey)
-	if err != nil {
-		log.Warn().Err(err).Str("session", sessionKey).Msg("Erreur lecture session avant sauvegarde")
-	}
-
-	history = append(history,
-		llm.Message{Role: "user", Content: userContent},
-		llm.Message{Role: "assistant", Content: assistantContent},
-	)
-
-	if err := a.config.SessionStore.Save(sessionKey, history); err != nil {
-		log.Warn().Err(err).Str("session", sessionKey).Msg("Erreur sauvegarde session")
-	}
-}
-
 // processSubagentResult traite un résultat de subagent
 func (a *Agent) processSubagentResult(ctx context.Context, msg *bus.InboundMessage) (*bus.OutboundMessage, error) {
 	log.Info().Str("chat_id", msg.ChatID).Msg("🔄 Traitement résultat subagent")
@@ -311,19 +195,19 @@ func (a *Agent) processSubagentResult(ctx context.Context, msg *bus.InboundMessa
 
 	var messages []llm.Message
 	messages = append(messages, llm.Message{Role: "system", Content: systemPrompt})
-	messages = append(messages, history...)
+	messages = append(messages, llm.SanitizeHistory(history)...)
 	messages = append(messages, llm.Message{Role: "user", Content: msg.Content})
 
 	resp, err := a.config.Provider.Chat(ctx, messages, a.convertTools(a.tools.GetTools()))
 	if err != nil {
 		log.Error().Err(err).Msg("❌ Erreur LLM lors du résumé du subagent, utilisation du résultat brut")
 		fallbackContent := fmt.Sprintf("✅ Tâche terminée !\n\n%s", brutResult)
-		a.persist(sessionKey, "[Tâche en arrière-plan terminée]", fallbackContent)
+		a.persist(sessionKey, []llm.Message{{Role: "user", Content: "[Tâche en arrière-plan terminée]"}, {Role: "assistant", Content: fallbackContent}})
 		return &bus.OutboundMessage{Channel: originChannel, ChatID: originChatID, Content: fallbackContent}, nil
 	}
 
 	log.Info().Str("chat_id", originChatID).Msg("✅ Résultat subagent résumé et prêt à être envoyé")
-	a.persist(sessionKey, "[Tâche en arrière-plan terminée]", resp.Content)
+	a.persist(sessionKey, []llm.Message{{Role: "user", Content: "[Tâche en arrière-plan terminée]"}, {Role: "assistant", Content: resp.Content}})
 
 	return &bus.OutboundMessage{Channel: originChannel, ChatID: originChatID, Content: resp.Content}, nil
 }
@@ -352,11 +236,14 @@ func (a *Agent) buildSystemPrompt() string {
 		}
 	}
 
-	parts = append(parts, fmt.Sprintf("%s\n\nHeure actuelle: %s",
-		a.config.Instructions, time.Now().Format("2006-01-02 15:04:05")))
+	now := time.Now()
+	parts = append(parts, fmt.Sprintf("%s\n\nDate et heure actuelles : %s %s",
+		a.config.Instructions, frenchWeekdays[now.Weekday()], now.Format("2006-01-02 15:04")))
 
 	return strings.Join(parts, "\n\n---\n\n")
 }
+
+var frenchWeekdays = [...]string{"dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"}
 
 // executeTool exécute un outil par son nom
 func (a *Agent) executeTool(ctx context.Context, name string, args map[string]interface{}) (string, error) {
@@ -438,14 +325,7 @@ func (a *Agent) parseInlineToolCall(content string) (*llm.ToolCall, bool) {
 	if json.Unmarshal(nameRaw, &name) != nil || name == "" {
 		return nil, false
 	}
-	known := false
-	for _, t := range a.tools.GetTools() {
-		if t.Function.Name == name {
-			known = true
-			break
-		}
-	}
-	if !known {
+	if a.resolveToolName(name) == "" {
 		return nil, false
 	}
 	argsRaw := json.RawMessage("{}")
@@ -459,4 +339,3 @@ func (a *Agent) parseInlineToolCall(content string) (*llm.ToolCall, bool) {
 	tc.Function.Arguments = string(argsRaw)
 	return tc, true
 }
-

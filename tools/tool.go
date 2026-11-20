@@ -30,16 +30,21 @@ func validateParams(params map[string]interface{}, schema map[string]interface{}
 		return fmt.Errorf("schema must be object type, got %s", schemaType)
 	}
 
-	// Check required fields
-	if required, ok := schema["required"].([]interface{}); ok {
-		for _, req := range required {
-			reqStr, ok := req.(string)
-			if !ok {
-				continue
+	// Check required fields ([]string or []interface{}, both are common in Go schemas)
+	var required []string
+	switch r := schema["required"].(type) {
+	case []string:
+		required = r
+	case []interface{}:
+		for _, v := range r {
+			if s, ok := v.(string); ok {
+				required = append(required, s)
 			}
-			if _, exists := params[reqStr]; !exists {
-				return fmt.Errorf("missing required parameter: %s", reqStr)
-			}
+		}
+	}
+	for _, req := range required {
+		if v, exists := params[req]; !exists || v == nil {
+			return fmt.Errorf("missing required parameter: %s", req)
 		}
 	}
 

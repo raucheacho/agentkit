@@ -13,10 +13,15 @@ const bufferSize = 500
 
 // InboundMessage représente un message entrant
 type InboundMessage struct {
-	Channel   string
-	SenderID  string
-	ChatID    string
-	Content   string
+	Channel  string
+	SenderID string
+	ChatID   string
+	Content  string
+	// Note : contexte réservé au modèle pour ce seul tour (fiche du client,
+	// mission en cours…). Placé devant le message à l'envoi, il n'est JAMAIS
+	// enregistré dans l'historique : chaque tour relit une note à jour au lieu
+	// d'accumuler des notes périmées.
+	Note      string
 	Media     []string
 	Timestamp time.Time
 	Metadata  map[string]interface{}

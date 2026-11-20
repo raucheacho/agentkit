@@ -12,8 +12,10 @@ import (
 	"github.com/raucheacho/agentkit/llm"
 )
 
-// maxHistory bounds how many messages are kept per conversation.
-const maxHistory = 20
+// maxHistory bounds how many messages are kept per conversation. History now
+// holds tool calls and their results, so a single turn can span several
+// messages; the cut always lands on a turn boundary (see llm.TrimHistory).
+const maxHistory = 60
 
 // SQLiteStore persists conversation history, one row per session key (channel:chatID).
 // It shares its *sql.DB with the app's other stores (see pkg/store.Open).
@@ -57,9 +59,7 @@ func (s *SQLiteStore) Get(key string) ([]llm.Message, error) {
 // Save persists the message history for a session key, truncating it to the
 // most recent messages.
 func (s *SQLiteStore) Save(key string, messages []llm.Message) error {
-	if len(messages) > maxHistory {
-		messages = messages[len(messages)-maxHistory:]
-	}
+	messages = llm.TrimHistory(messages, maxHistory)
 
 	raw, err := json.Marshal(messages)
 	if err != nil {

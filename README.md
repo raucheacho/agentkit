@@ -78,6 +78,24 @@ wa := channels.NewWotp(channels.WotpConfig{ChatURL: url, ChatAPIKey: key}, messa
 
 L'identité de la conversation (canal + chat ID — le numéro de téléphone pour WhatsApp) circule via `tools.ConversationContext` dans le `context.Context` de chaque appel de tool : un tool ne peut jamais agir sur une autre identité que celle qui écrit.
 
+## Garanties de la boucle
+
+- **Historique complet** : chaque tour enregistre le message, les appels d'outils, leurs
+  résultats et la réponse. Au tour suivant, le modèle sait ce qu'il a réellement fait
+  (référence, identifiant, date) au lieu de le deviner.
+- **Historique toujours valide** : la coupe (`session`, 60 messages) se fait à une frontière
+  de tour, et l'historique est réparé avant envoi (`llm.SanitizeHistory`) : jamais de
+  résultat d'outil orphelin ni d'appel sans réponse.
+- **Note éphémère** : `InboundMessage.Note` accompagne le message pour ce seul tour (fiche,
+  mission en cours) et n'est jamais enregistrée.
+- **Outils** : seul un outil exposé (`EnabledTools`) peut être exécuté ; les variantes de nom
+  courantes (`functions.x`, casse, jetons de format) sont réparées ; un nom inconnu, des
+  arguments invalides ou un paramètre obligatoire manquant renvoient une erreur lisible au
+  modèle pour qu'il se corrige ; un résultat trop long est tronqué (`MaxToolResultChars`).
+- **Toujours une réponse** : une réponse vide est retentée une fois ; budget d'étapes épuisé
+  ou réponses vides, le modèle est appelé une dernière fois sans outils pour répondre ;
+  à défaut, `FallbackReply`.
+
 ## Notes
 
 - `mattn/go-sqlite3` impose **cgo** : compilez avec `CGO_ENABLED=1`.

@@ -123,15 +123,18 @@ func (p *GroqProvider) Chat(ctx context.Context, messages []Message, tools []Too
 	}
 
 	var chatResp groqChatResponse
-	if err := json.Unmarshal(body, &chatResp); err != nil {
-		return nil, fmt.Errorf("decode error: %w", err)
-	}
+	decodeErr := json.Unmarshal(body, &chatResp)
 
+	// Le code HTTP d'abord : une passerelle en panne renvoie souvent du HTML,
+	// et l'erreur doit garder son statut (429, 502…) pour être réessayée.
 	if resp.StatusCode != http.StatusOK {
-		if chatResp.Error != nil {
+		if decodeErr == nil && chatResp.Error != nil {
 			return nil, fmt.Errorf("groq error (status %d): %s", resp.StatusCode, chatResp.Error.Message)
 		}
-		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, truncateBody(body))
+	}
+	if decodeErr != nil {
+		return nil, fmt.Errorf("decode error: %w", decodeErr)
 	}
 
 	if len(chatResp.Choices) == 0 {
@@ -284,4 +287,13 @@ func (p *GroqProvider) ListModels(ctx context.Context) ([]string, error) {
 	}
 
 	return models, nil
+}
+
+// truncateBody borne un corps d'erreur dans les messages et journaux.
+func truncateBody(b []byte) string {
+	const max = 500
+	if len(b) > max {
+		return string(b[:max]) + "..."
+	}
+	return string(b)
 }
