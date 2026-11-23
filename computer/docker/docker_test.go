@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -12,11 +13,16 @@ import (
 )
 
 // Ces tests demandent un démon Docker ; ils sont sautés sinon (et avec -short).
+// AGENTKIT_REQUIRE_DOCKER=1 (la CI) fait échouer au lieu de sauter.
 func needDocker(t *testing.T) {
-	if testing.Short() {
+	required := os.Getenv("AGENTKIT_REQUIRE_DOCKER") != ""
+	if testing.Short() && !required {
 		t.Skip("-short")
 	}
 	if err := exec.Command("docker", "info").Run(); err != nil {
+		if required {
+			t.Fatal("Docker indisponible : ", err)
+		}
 		t.Skip("Docker indisponible")
 	}
 }
