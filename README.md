@@ -93,3 +93,7 @@ Chacun est protégé par des tests ; le pourquoi est dans `docs/decisions.md`.
 ## Branches
 
 `main` : dernière version publiée (v0.2.0, qui change l'API de la v0.1). `develop` : le travail en cours, fusionné dans `main` à chaque version.
+
+## Licence
+
+Apache-2.0 (`LICENSE`, `NOTICE`), comme VectixDB.

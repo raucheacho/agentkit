@@ -27,7 +27,7 @@ Chaque phase a été vérifiée par ses tests (`-race`, désormais aussi en CI),
 | 0.2 | ~~Fusion et version~~ | fait : `develop` fusionné dans `main`, tag `v0.2.0` | — |
 | 0.3 | ~~VectixDB publié~~ | fait : `contrib/vectix` dépend de VectixDB `bindings/go` v0.1.0 publié (bibliothèques compilées incluses), job CI, tag `contrib/vectix/v0.1.0` | — |
 | 0.4 | Essai avec un modèle capable | rejouer les scénarios des exemples avec un modèle de la taille d'un GPT-4o : les écarts restants deviennent des tâches (les essais 8B mélangent défauts du modèle et du framework) | S |
-| 0.5 | Licence | le dépôt n'a pas de fichier de licence : à choisir avant toute diffusion (MIT, Apache-2.0, AGPL…) | — |
+| 0.5 | ~~Licence~~ | fait : Apache-2.0 (`LICENSE`, `NOTICE`, aussi dans `contrib/vectix`) ; le dépôt reste privé, le rendre public est une décision à part | — |
 
 ## 1. Le navigateur de l'agent — L
 
@@ -89,7 +89,7 @@ Chaque phase a été vérifiée par ses tests (`-race`, désormais aussi en CI),
 
 ## 6. Ordre conseillé
 
-1. Préalables 0.4 et 0.5 (0.1 à 0.3 faits).
+1. Préalable 0.4 (0.1 à 0.3 et 0.5 faits).
 2. Persibot sur `kit` (2) : la meilleure validation du framework sur un vrai métier.
 3. Budget d'outils et vérification des affirmations (5) : petits chantiers, gain direct sur la qualité.
 4. Navigateur (1.1 → 1.2 → 1.3 → 1.4).

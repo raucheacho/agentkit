@@ -102,4 +102,9 @@ Chaque entrée : contexte → décision → conséquences. Les sources d'inspira
 
 ## ADR-023 — Branches et dépendants
 - **Décision** : deux branches, `main` (stable, v0.1.2) et `develop` (v0.2) ; un commit par phase. Persibot dépend de la version publiée du commit `79a5dd5` (pseudo-version), plus d'un `go.work` vers un dossier local.
-- **Reste ouvert** : fusion dans `main` et tag `v0.2.0`, après la migration de persibot ou une période d'essai.
+- **Suite** : `develop` fusionné dans `main` et tagué `v0.2.0` ; `contrib/vectix` tagué à part (`contrib/vectix/v0.1.0`) sur VectixDB publié.
+
+## ADR-024 — Licence Apache-2.0
+- **Décision** : Apache-2.0, comme VectixDB. Permissive (un framework n'a de valeur que s'il est adopté ; persibot et les autres applications restent libres de leur licence), avec une licence explicite sur les brevets et un `NOTICE` à conserver.
+- **Écartées** : MIT (rien sur les brevets) ; AGPL (oblige tout service bâti dessus à publier son code, frein à l'adoption).
+- **Détail** : `contrib/vectix` est un module à part ; il porte sa propre copie de `LICENSE` et `NOTICE`, car l'archive d'un module Go n'inclut pas les fichiers du module parent.
