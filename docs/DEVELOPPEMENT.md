@@ -47,7 +47,7 @@ Le **noyau** (`llm`, `tool`, `agent`, `prompt`, `session`, `turn`, `runner`, `ch
 
 ## 2. Mise en route
 
-Prérequis : **Go 1.26** ou plus récent. Pour les essais réels : un modèle (clé d'API, ou [Ollama](https://ollama.com) en local). Facultatif : Docker (ordinateur de l'agent), Zig et VectixDB (`contrib/vectix`).
+Prérequis : **Go 1.26** ou plus récent. Pour les essais réels : un modèle (clé d'API, ou [Ollama](https://ollama.com) en local). Facultatif : Docker (ordinateur de l'agent) ; pour `contrib/vectix`, un compilateur C (cgo) suffit, les bibliothèques de VectixDB arrivent avec ses modules Go.
 
 ```sh
 make test         # tous les tests, avec -race
@@ -84,7 +84,7 @@ Données locales : `AGENTKIT_DIR` (défaut : un dossier dans le répertoire temp
 
 Les **contrats** (`*test`) sont des suites partagées qu'une implémentation doit passer : `turntest`, `trusttest`, `delegatetest`, `sessiontest`, `notestest`, `scheduletest`, `observetest`, `computertest`. Une nouvelle implémentation (Postgres, Redis, un autre bac à sable) se branche sur le contrat existant : c'est lui qui garantit les invariants (exécution unique, reprise sans relance, cloisonnement…).
 
-**CI** (`.github/workflows/ci.yml`) : à chaque push sur `main` ou `develop` et à chaque pull request, `gofmt`, `go vet` et `go test -race -short` sur Linux et macOS, plus les tests Docker sur Linux avec `AGENTKIT_REQUIRE_DOCKER=1` (sans Docker, ils échouent au lieu d'être sautés). `contrib/vectix` n'y est pas encore (VectixDB non publié).
+**CI** (`.github/workflows/ci.yml`) : à chaque push sur `main` ou `develop` et à chaque pull request, `gofmt`, `go vet` et `go test -race -short` sur Linux et macOS, plus les tests Docker sur Linux avec `AGENTKIT_REQUIRE_DOCKER=1` (sans Docker, ils échouent au lieu d'être sautés). `contrib/vectix` a son job (`go vet`, `go test -race`, Linux et macOS).
 
 `internal/archtest` vérifie que le module ne dépend que de la bibliothèque standard et que le noyau n'importe aucune implémentation.
 
@@ -145,7 +145,7 @@ Le placer dans le `Texts` du paquet (avec sa valeur française par défaut dans 
 ## 6. Livrer
 
 - `develop` → `main` par fusion, puis un tag `vX.Y.Z` : c'est ce que récupèrent `go get github.com/raucheacho/agentkit@vX.Y.Z` et le proxy Go.
-- Le sous-module se tague à part : `contrib/vectix/vX.Y.Z`. Retirer ses `replace` locaux avant (ils pointent vers les dossiers voisins de la machine de développement) et attendre que VectixDB publie ses bibliothèques compilées.
+- Le sous-module se tague à part : `contrib/vectix/vX.Y.Z`, après avoir mis dans son `go.mod` la version d'agentkit qu'il vise. Son `replace` vers `../..` sert au développement dans ce dépôt et reste : il est ignoré par les projets qui en dépendent.
 - La v0.2 **change l'API** par rapport à la v0.1 : annoncer la rupture dans les notes de version.
 
 ## 7. Problèmes connus et limites
@@ -158,5 +158,4 @@ Le placer dans le `Texts` du paquet (avec sa valeur française par défaut dans 
 | `computer/local` | **aucune isolation** ; non pris en charge sous Windows au-delà de l'arrêt simple du processus |
 | `computer/docker` | une seule machine ; les processus qu'une commande détache dans une nouvelle session (`setsid`) échappent à l'arrêt du groupe |
 | Observation poussée | les événements reçus par `Push` et pas encore regroupés sont perdus si le processus s'arrête (les sources relevées, elles, les renvoient) |
-| `contrib/vectix` | dépend de `replace` locaux tant que VectixDB n'est pas publié avec ses bibliothèques |
 | Persibot | utilise encore l'API v0.1 (commit `79a5dd5`) ; migration sur `kit` à faire |

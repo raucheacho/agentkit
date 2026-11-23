@@ -29,9 +29,9 @@ Pour les petits modèles (≤ 8B), activer `ParseInlineTools` et limiter le nomb
 | Module (hors ordinateur) | ✅ testé (CI) | ✅ testé (CI) | prévu (Go pur, sans cgo) |
 | `computer/local` | ✅ testé (CI) | ✅ testé (CI) | arrêt du seul processus principal, pas de son groupe |
 | `computer/docker` | ✅ testé en local (Docker Desktop) | ✅ testé (CI, filtrage réseau compris) | prévu (Docker Desktop) |
-| `contrib/vectix` | ✅ testé (arm64) | bibliothèques amd64 et arm64 fournies | non fourni par VectixDB |
+| `contrib/vectix` | ✅ testé (CI) | ✅ testé (CI) ; glibc, amd64 et arm64 | non fourni par VectixDB |
 
-« Testé (CI) » : vérifié à chaque push par `.github/workflows/ci.yml` (`go vet`, `go test -race`, tests Docker sur Linux). « Prévu » veut dire que rien ne l'empêche, pas que c'est vérifié. `contrib/vectix` n'est pas dans la CI tant que VectixDB n'est pas publié (`FEUILLE_DE_ROUTE.md` §0.3).
+« Testé (CI) » : vérifié à chaque push par `.github/workflows/ci.yml` (`go vet`, `go test -race`, tests Docker sur Linux, `contrib/vectix`). « Prévu » veut dire que rien ne l'empêche, pas que c'est vérifié.
 
 ## Bases de données
 

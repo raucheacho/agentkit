@@ -1,0 +1,10 @@
+github.com/raucheacho/vectixdb/bindings/go v0.1.0 h1:xJuTzNps7HMvM9N7MxE2UaM5NgwDU38+9BjU3P7s330=
+github.com/raucheacho/vectixdb/bindings/go v0.1.0/go.mod h1:XkFzkQvZLk0oakf9E4F0NOuo3LQJRbh1233VNJHiUb0=
+github.com/raucheacho/vectixdb/bindings/go/lib/darwin_amd64 v0.1.0 h1:/W7GFfcACP5HEvoy7g8GHryxwe9F0QWPDTKkJ0trdPM=
+github.com/raucheacho/vectixdb/bindings/go/lib/darwin_amd64 v0.1.0/go.mod h1:TWzaR3zLDQnPoWIRRGhNTHv+S0BnExF7f81iFF4j20Y=
+github.com/raucheacho/vectixdb/bindings/go/lib/darwin_arm64 v0.1.0 h1:Ptw0TxcutDN6EbUm/ygElcS6JnxhqM/SVv2DRr9BCu4=
+github.com/raucheacho/vectixdb/bindings/go/lib/darwin_arm64 v0.1.0/go.mod h1:Z69NE0qxUZ1UnncdKGmaMNlt6PVoIAjKkF1b1VZnIGo=
+github.com/raucheacho/vectixdb/bindings/go/lib/linux_amd64 v0.1.0 h1:Y32sN5QBDQBUArbB1VHjQSfVejXcKPaQMPfOhWKTbeI=
+github.com/raucheacho/vectixdb/bindings/go/lib/linux_amd64 v0.1.0/go.mod h1:hpHGyZIs7Cx12lP6qD4VhhuOAJpBtvxq3xWNZ5zQcG8=
+github.com/raucheacho/vectixdb/bindings/go/lib/linux_arm64 v0.1.0 h1:wMEn2YUoQMu0CAEgJIepm9aVor2oHmonYAektBKivAE=
+github.com/raucheacho/vectixdb/bindings/go/lib/linux_arm64 v0.1.0/go.mod h1:idXGOd6ETORpvR6p4BXAldGlnrisiPiaor6LZLCt9Sg=

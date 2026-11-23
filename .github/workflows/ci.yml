@@ -44,3 +44,23 @@ jobs:
       - run: go test -race -v ./computer/docker/...
         env:
           AGENTKIT_REQUIRE_DOCKER: "1"
+
+  vectix:
+    name: contrib/vectix (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: contrib/vectix
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: contrib/vectix/go.mod
+          cache-dependency-path: contrib/vectix/go.sum
+      - run: go vet ./...
+      - run: go test -race ./...
