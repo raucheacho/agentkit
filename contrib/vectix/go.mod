@@ -19,9 +19,9 @@ require (
 // aussi tant que ses versions publiées ne les embarquent pas.
 replace (
 	github.com/raucheacho/agentkit => ../..
-	github.com/raucheacho/vectixdb/bindings/go => ../../../vectixdb/bindings/go
-	github.com/raucheacho/vectixdb/bindings/go/lib/darwin_amd64 => ../../../vectixdb/bindings/go/lib/darwin_amd64
-	github.com/raucheacho/vectixdb/bindings/go/lib/darwin_arm64 => ../../../vectixdb/bindings/go/lib/darwin_arm64
-	github.com/raucheacho/vectixdb/bindings/go/lib/linux_amd64 => ../../../vectixdb/bindings/go/lib/linux_amd64
-	github.com/raucheacho/vectixdb/bindings/go/lib/linux_arm64 => ../../../vectixdb/bindings/go/lib/linux_arm64
+	github.com/raucheacho/vectixdb/bindings/go => ../../../agentique/vectixdb/bindings/go
+	github.com/raucheacho/vectixdb/bindings/go/lib/darwin_amd64 => ../../../agentique/vectixdb/bindings/go/lib/darwin_amd64
+	github.com/raucheacho/vectixdb/bindings/go/lib/darwin_arm64 => ../../../agentique/vectixdb/bindings/go/lib/darwin_arm64
+	github.com/raucheacho/vectixdb/bindings/go/lib/linux_amd64 => ../../../agentique/vectixdb/bindings/go/lib/linux_amd64
+	github.com/raucheacho/vectixdb/bindings/go/lib/linux_arm64 => ../../../agentique/vectixdb/bindings/go/lib/linux_arm64
 )
