@@ -1,11 +1,15 @@
-.PHONY: test build fmt
+.PHONY: test build fmt vet
 
-# mattn/go-sqlite3 (session/store) requires cgo.
+# Le module n'a besoin d'aucun cgo (SQLite via modernc.org/sqlite). GOWORK=off
+# évite qu'un go.work parent (persibot) remplace ce module par une autre copie.
 test:
-	CGO_ENABLED=1 go test -race ./...
+	GOWORK=off go test -race ./...
+
+vet:
+	GOWORK=off go vet ./...
 
 build:
-	CGO_ENABLED=1 go build ./...
+	GOWORK=off go build ./...
 
 fmt:
-	go fmt ./...
+	gofmt -w .

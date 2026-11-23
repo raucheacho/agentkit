@@ -3,15 +3,13 @@ package llm
 import "testing"
 
 func tc(id string) ToolCall {
-	c := ToolCall{ID: id, Type: "function"}
-	c.Function.Name = "x"
-	return c
+	return ToolCall{ID: id, Name: "x"}
 }
 
 func roles(ms []Message) string {
 	s := ""
 	for _, m := range ms {
-		s += m.Role[:1]
+		s += string(m.Role)[:1]
 	}
 	return s
 }

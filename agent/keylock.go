@@ -2,29 +2,42 @@ package agent
 
 import "sync"
 
-// keyedMutex serializes work for a given key while letting different keys
-// run fully in parallel. Used so that two messages for the same WhatsApp
-// conversation are always processed in order, while different conversations
-// keep running concurrently.
+// keyedMutex sérialise le travail d'une même clé et laisse les clés
+// différentes en parallèle. Un verrou est libéré de la table quand plus
+// personne ne l'attend : la table ne grossit pas avec le nombre de sessions.
 type keyedMutex struct {
 	mu    sync.Mutex
-	locks map[string]*sync.Mutex
+	locks map[string]*refLock
+}
+
+type refLock struct {
+	sync.Mutex
+	refs int
 }
 
 func newKeyedMutex() *keyedMutex {
-	return &keyedMutex{locks: make(map[string]*sync.Mutex)}
+	return &keyedMutex{locks: make(map[string]*refLock)}
 }
 
-// Lock acquires the lock for key and returns a function to release it.
+// Lock prend le verrou de key et renvoie la fonction qui le relâche.
 func (k *keyedMutex) Lock(key string) func() {
 	k.mu.Lock()
 	l, ok := k.locks[key]
 	if !ok {
-		l = &sync.Mutex{}
+		l = &refLock{}
 		k.locks[key] = l
 	}
+	l.refs++
 	k.mu.Unlock()
 
 	l.Lock()
-	return l.Unlock
+	return func() {
+		l.Unlock()
+		k.mu.Lock()
+		l.refs--
+		if l.refs == 0 {
+			delete(k.locks, key)
+		}
+		k.mu.Unlock()
+	}
 }

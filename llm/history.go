@@ -18,7 +18,7 @@ func TrimHistory(messages []Message, max int) []Message {
 		return messages
 	}
 	start := len(messages) - max
-	for start < len(messages) && messages[start].Role != "user" {
+	for start < len(messages) && messages[start].Role != RoleUser {
 		start++
 	}
 	return messages[start:]
@@ -32,7 +32,7 @@ func TrimHistory(messages []Message, max int) []Message {
 // L'historique d'origine n'est pas modifié.
 func SanitizeHistory(messages []Message) []Message {
 	start := 0
-	for start < len(messages) && messages[start].Role != "user" {
+	for start < len(messages) && messages[start].Role != RoleUser {
 		start++
 	}
 	out := make([]Message, 0, len(messages)-start)
@@ -42,14 +42,14 @@ func SanitizeHistory(messages []Message) []Message {
 	closePending := func() {
 		for _, id := range order {
 			if pending[id] {
-				out = append(out, Message{Role: "tool", Content: MissingToolResult, ToolCallID: id})
+				out = append(out, Message{Role: RoleTool, Content: MissingToolResult, ToolCallID: id})
 			}
 		}
 		pending, order = map[string]bool{}, nil
 	}
 
 	for _, m := range messages[start:] {
-		if m.Role == "tool" {
+		if m.Role == RoleTool {
 			if !pending[m.ToolCallID] {
 				continue // réponse orpheline
 			}
@@ -59,7 +59,7 @@ func SanitizeHistory(messages []Message) []Message {
 		}
 		closePending()
 		out = append(out, m)
-		if m.Role == "assistant" {
+		if m.Role == RoleAssistant {
 			for _, tc := range m.ToolCalls {
 				pending[tc.ID] = true
 				order = append(order, tc.ID)
