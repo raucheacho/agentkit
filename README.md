@@ -20,7 +20,7 @@ Documentation :
 Prérequis : Go 1.26. Pour un essai réel, un modèle : une clé d'API compatible OpenAI, ou [Ollama](https://ollama.com) en local.
 
 ```sh
-go get github.com/raucheacho/agentkit@develop
+go get github.com/raucheacho/agentkit@v0.2.0
 make test      # tous les tests, avec -race
 ```
 
@@ -92,4 +92,4 @@ Chacun est protégé par des tests ; le pourquoi est dans `docs/decisions.md`.
 
 ## Branches
 
-`main` : version stable publiée (v0.1.2). `develop` : la v0.2 en cours, qui change l'API de la v0.1.
+`main` : dernière version publiée (v0.2.0, qui change l'API de la v0.1). `develop` : le travail en cours, fusionné dans `main` à chaque version.

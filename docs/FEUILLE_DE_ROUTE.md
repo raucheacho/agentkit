@@ -1,6 +1,6 @@
 # Feuille de route
 
-État au 23/11/2026 : la v0.2 est sur la branche `develop`, un commit par phase. Ce document récapitule ce qui est fait et liste ce qui reste, avec pour chaque chantier l'approche prévue dans le code existant, les critères d'acceptation et les dépendances. Les tailles sont indicatives (S ≈ quelques jours, M ≈ une à deux semaines, L ≈ plus).
+État au 23/11/2026 : la v0.2.0 est publiée (`main`, tag `v0.2.0`), un commit par phase. Ce document récapitule ce qui est fait et liste ce qui reste, avec pour chaque chantier l'approche prévue dans le code existant, les critères d'acceptation et les dépendances. Les tailles sont indicatives (S ≈ quelques jours, M ≈ une à deux semaines, L ≈ plus).
 
 ## Fait (v0.2)
 
@@ -24,7 +24,7 @@ Chaque phase a été vérifiée par ses tests (`-race`, désormais aussi en CI),
 | # | Chantier | Détail | Taille |
 |---|---|---|---|
 | 0.1 | ~~CI~~ | fait : `.github/workflows/ci.yml` (`gofmt`, `go vet`, `go test -race` sur Linux et macOS ; tests Docker sur Linux, qui échouent au lieu de sauter grâce à `AGENTKIT_REQUIRE_DOCKER`) | — |
-| 0.2 | Fusion et version | fusionner `develop` dans `main`, taguer `v0.2.0`, notes de version annonçant la rupture d'API | S |
+| 0.2 | ~~Fusion et version~~ | fait : `develop` fusionné dans `main`, tag `v0.2.0` | — |
 | 0.3 | VectixDB publié | publier VectixDB avec ses bibliothèques compilées, retirer les `replace` de `contrib/vectix`, taguer `contrib/vectix/v0.1.0` | S |
 | 0.4 | Essai avec un modèle capable | rejouer les scénarios des exemples avec un modèle de la taille d'un GPT-4o : les écarts restants deviennent des tâches (les essais 8B mélangent défauts du modèle et du framework) | S |
 | 0.5 | Licence | le dépôt n'a pas de fichier de licence : à choisir avant toute diffusion (MIT, Apache-2.0, AGPL…) | — |
@@ -89,7 +89,7 @@ Chaque phase a été vérifiée par ses tests (`-race`, désormais aussi en CI),
 
 ## 6. Ordre conseillé
 
-1. Préalables 0.2 à 0.4 (0.1 fait).
+1. Préalables 0.3 et 0.4 (0.1 et 0.2 faits).
 2. Persibot sur `kit` (2) : la meilleure validation du framework sur un vrai métier.
 3. Budget d'outils et vérification des affirmations (5) : petits chantiers, gain direct sur la qualité.
 4. Navigateur (1.1 → 1.2 → 1.3 → 1.4).
