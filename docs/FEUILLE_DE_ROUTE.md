@@ -15,14 +15,15 @@
 | 7b | `computer` : workspace Docker verrouillé et local | `ordinateur de l'agent` |
 | 7 | `mcp`, `event`, compteur de coûts | `client mcp et événements` |
 | 8 | `kit`, `examples/assistant`, `examples/support` | `kit et exemples` |
+| 0.1 | CI GitHub Actions : Linux, macOS, tests Docker sur Linux | `ajout de la ci` |
 
-Chaque phase a été vérifiée par ses tests (`-race`), puis par un essai réel avec un modèle local 8B (`llama3.1:8b`, Ollama).
+Chaque phase a été vérifiée par ses tests (`-race`, désormais aussi en CI), puis par un essai réel avec un modèle local 8B (`llama3.1:8b`, Ollama).
 
 ## 0. Préalables
 
 | # | Chantier | Détail | Taille |
 |---|---|---|---|
-| 0.1 | CI | aucune CI aujourd'hui : un workflow `go vet` + `go test -race ./...` sur Linux et macOS, plus un job Docker pour `computer/docker` | S |
+| 0.1 | ~~CI~~ | fait : `.github/workflows/ci.yml` (`gofmt`, `go vet`, `go test -race` sur Linux et macOS ; tests Docker sur Linux, qui échouent au lieu de sauter grâce à `AGENTKIT_REQUIRE_DOCKER`) | — |
 | 0.2 | Fusion et version | fusionner `develop` dans `main`, taguer `v0.2.0`, notes de version annonçant la rupture d'API | S |
 | 0.3 | VectixDB publié | publier VectixDB avec ses bibliothèques compilées, retirer les `replace` de `contrib/vectix`, taguer `contrib/vectix/v0.1.0` | S |
 | 0.4 | Essai avec un modèle capable | rejouer les scénarios des exemples avec un modèle de la taille d'un GPT-4o : les écarts restants deviennent des tâches (les essais 8B mélangent défauts du modèle et du framework) | S |
@@ -88,7 +89,7 @@ Chaque phase a été vérifiée par ses tests (`-race`), puis par un essai réel
 
 ## 6. Ordre conseillé
 
-1. Préalables 0.1 à 0.4.
+1. Préalables 0.2 à 0.4 (0.1 fait).
 2. Persibot sur `kit` (2) : la meilleure validation du framework sur un vrai métier.
 3. Budget d'outils et vérification des affirmations (5) : petits chantiers, gain direct sur la qualité.
 4. Navigateur (1.1 → 1.2 → 1.3 → 1.4).

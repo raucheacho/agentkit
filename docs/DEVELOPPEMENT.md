@@ -84,6 +84,8 @@ Données locales : `AGENTKIT_DIR` (défaut : un dossier dans le répertoire temp
 
 Les **contrats** (`*test`) sont des suites partagées qu'une implémentation doit passer : `turntest`, `trusttest`, `delegatetest`, `sessiontest`, `notestest`, `scheduletest`, `observetest`, `computertest`. Une nouvelle implémentation (Postgres, Redis, un autre bac à sable) se branche sur le contrat existant : c'est lui qui garantit les invariants (exécution unique, reprise sans relance, cloisonnement…).
 
+**CI** (`.github/workflows/ci.yml`) : à chaque push sur `main` ou `develop` et à chaque pull request, `gofmt`, `go vet` et `go test -race -short` sur Linux et macOS, plus les tests Docker sur Linux avec `AGENTKIT_REQUIRE_DOCKER=1` (sans Docker, ils échouent au lieu d'être sautés). `contrib/vectix` n'y est pas encore (VectixDB non publié).
+
 `internal/archtest` vérifie que le module ne dépend que de la bibliothèque standard et que le noyau n'importe aucune implémentation.
 
 ## 4. Règles du projet
