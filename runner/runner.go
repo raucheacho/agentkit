@@ -85,6 +85,11 @@ type Runner struct {
 	log  *slog.Logger
 	wake chan struct{}
 
+	// ctl sérialise la réclamation des tours et leur arrêt : un tour réclamé
+	// (« en cours » dans la file) est inscrit dans running avant qu'un Stop
+	// puisse le chercher, sinon l'arrêt ne le trouverait ni dans la file
+	// d'attente ni parmi les tours en cours.
+	ctl     sync.Mutex
 	mu      sync.Mutex
 	running map[string]*running // par identifiant de tour
 	wg      sync.WaitGroup
@@ -166,6 +171,8 @@ func (r *Runner) dispatch(ctx context.Context) {
 	if free <= 0 || ctx.Err() != nil {
 		return
 	}
+	r.ctl.Lock()
+	defer r.ctl.Unlock()
 	turns, err := r.cfg.Queue.Claim(ctx, time.Now().UTC(), free)
 	if err != nil {
 		r.log.Error("runner : lecture de la file", "err", err)
@@ -194,6 +201,8 @@ func (r *Runner) dispatch(ctx context.Context) {
 // Stop arrête un tour : en cours, il est annulé (ce qu'il a déjà fait reste
 // enregistré) ; en attente, il est retiré de la file.
 func (r *Runner) Stop(ctx context.Context, turnID string) (bool, error) {
+	r.ctl.Lock()
+	defer r.ctl.Unlock()
 	r.mu.Lock()
 	run, ok := r.running[turnID]
 	r.mu.Unlock()
@@ -207,6 +216,8 @@ func (r *Runner) Stop(ctx context.Context, turnID string) (bool, error) {
 // StopSession arrête le tour en cours d'une session et annule ceux qui
 // attendent. Renvoie le nombre de tours arrêtés ou annulés.
 func (r *Runner) StopSession(ctx context.Context, session string) (int, error) {
+	r.ctl.Lock()
+	defer r.ctl.Unlock()
 	n := 0
 	r.mu.Lock()
 	for _, run := range r.running {
