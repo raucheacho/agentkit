@@ -153,6 +153,46 @@ func TestSystemPromptIsStable(t *testing.T) {
 	}
 }
 
+// countSystem compte les remplacements du prompt système.
+type countSystem struct {
+	*session.Memory
+	mu  sync.Mutex
+	set int
+}
+
+func (c *countSystem) SetSystem(ctx context.Context, key, system string) error {
+	c.mu.Lock()
+	c.set++
+	c.mu.Unlock()
+	return c.Memory.SetSystem(ctx, key, system)
+}
+
+// Avec LiveSystem, un changement de configuration s'applique au tour suivant ;
+// sans changement, le prompt n'est pas réécrit (cache du fournisseur gardé).
+func TestLiveSystem(t *testing.T) {
+	identity := "Je suis v1"
+	p := &scripted{replies: []llm.Message{text("a"), text("b"), text("c")}}
+	st := &countSystem{Memory: session.NewMemory()}
+	a, _ := newAgent(t, p, func(c *Config) {
+		c.Sessions = st
+		c.LiveSystem = true
+		c.System = func(context.Context, tool.Conversation) (string, error) { return identity, nil }
+	})
+	send(t, a, "un", "")
+	send(t, a, "deux", "")
+	if st.set != 1 || p.reqs[0].Messages[0].Content != p.reqs[1].Messages[0].Content {
+		t.Fatalf("prompt inchangé réécrit : %d", st.set)
+	}
+	identity = "Je suis v2"
+	send(t, a, "trois", "")
+	if st.set != 2 || !strings.Contains(p.reqs[2].Messages[0].Content, "v2") {
+		t.Fatalf("changement non appliqué : %d %q", st.set, p.reqs[2].Messages[0].Content)
+	}
+	if got := roles(p.reqs[2].Messages); got != "system,user,assistant,user,assistant,user" {
+		t.Fatalf("historique perdu : %s", got)
+	}
+}
+
 // La note éphémère est vue par le modèle mais jamais enregistrée.
 func TestNoteIsNotPersisted(t *testing.T) {
 	p := &scripted{replies: []llm.Message{text("Bonjour")}}

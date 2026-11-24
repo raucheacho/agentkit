@@ -11,10 +11,11 @@ Seul `Provider` est obligatoire. La porte de confiance est toujours en place ; t
 | `Instructions` | identité et consignes, en tête du prompt système |
 | `ContextDir`, `ContextFiles` | fichiers de contexte lus à la création de chaque session (défaut `AGENTS.md`, `SOUL.md`) |
 | `Prompt` | sections de prompt supplémentaires (`prompt.Section`) |
+| `LiveSystem` | prompt recalculé à chaque tour, remplacé seulement s'il a changé : des Instructions ou sections modifiées à chaud s'appliquent au tour suivant |
 | `Tools`, `Toolsets` | outils métier |
 | `Channels`, `Allow`, `Session` | canaux ; filtre des expéditeurs ; clé de session d'un message |
 | `FailureReply` | message envoyé quand un tour échoue |
-| `Trust` | `Policy`, `TTL`, `AskHuman` (outil `ask_human`), `Summarize`, `OnChange` (notifier le responsable) |
+| `Trust` | `Policy`, `TTL`, `AskHuman` (outil `ask_human`), `Summarize`, `OnChange` (notifier le responsable), `Notice` (annonce de la décision rédigée par l'application, livrée sans appel au modèle) |
 | `Memory` | `Embedder`, `Scope`, `NoNotes`, `NoHistory`, `SharedHistory`, `Providers` |
 | `Skills` | `Dirs`, `Writable` (dossier où l'agent écrit ses skills) |
 | `Compaction` | compression de l'historique (`&agent.Compaction{}` pour les défauts) |

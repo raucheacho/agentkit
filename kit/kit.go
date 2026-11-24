@@ -78,6 +78,11 @@ type Config struct {
 	ContextFiles []string
 	// Prompt : sections supplémentaires du prompt système.
 	Prompt []prompt.Section
+	// LiveSystem recalcule le prompt système à chaque tour et ne le remplace
+	// que s'il a changé (voir agent.Config.LiveSystem) : des Instructions ou
+	// des sections qui changent pendant que l'agent tourne s'appliquent au
+	// tour suivant. Sans lui, le prompt est figé à la création de la session.
+	LiveSystem bool
 
 	// Tools et Toolsets : les outils métier.
 	Tools    []tool.Tool
@@ -137,6 +142,9 @@ type Trust struct {
 	// OnChange est appelé à chaque demande créée ou décidée (notifier le
 	// responsable…), en plus du flux d'événements.
 	OnChange func(ctx context.Context, r *trust.Request)
+	// Notice rédige l'annonce d'une décision, livrée telle quelle sans appel
+	// au modèle (voir trust.Config.Notice) ; nil : le modèle la rédige.
+	Notice func(ctx context.Context, r *trust.Request) (text string, ok bool)
 }
 
 // Memory règle la mémoire.
@@ -255,7 +263,7 @@ func New(ctx context.Context, cfg Config) (k *Kit, err error) {
 		onChange = func(ctx context.Context, r *trust.Request) { bus(ctx, r); extra(ctx, r) }
 	}
 	k.Gate = trust.New(trust.Config{Store: st.requests, Tools: k.Tools, Policy: cfg.Trust.Policy, TTL: cfg.Trust.TTL,
-		Summarize: cfg.Trust.Summarize, OnChange: onChange, Logger: log})
+		Summarize: cfg.Trust.Summarize, OnChange: onChange, Notice: cfg.Trust.Notice, Logger: log})
 	k.runs = append(k.runs, k.Gate.Run)
 	if cfg.Trust.AskHuman {
 		if err := k.Tools.Add(k.Gate.AskTool()); err != nil {
@@ -404,6 +412,7 @@ func New(ctx context.Context, cfg Config) (k *Kit, err error) {
 
 	ac := base
 	ac.System = prompt.New(sections...).Build
+	ac.LiveSystem = cfg.LiveSystem
 	ac.Compaction = cfg.Compaction
 	if k.Memory != nil {
 		ac.Recall, ac.AfterTurn = k.Memory.Recall, k.Memory.AfterTurn

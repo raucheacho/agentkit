@@ -256,3 +256,40 @@ func TestSilentTurnDeliversNothing(t *testing.T) {
 		t.Fatalf("livré : %v", got)
 	}
 }
+
+// Un tour à réponse fixe livre son texte et l'enregistre, sans appel au
+// modèle, après le tour en cours de la session.
+func TestFixedReplyTurn(t *testing.T) {
+	p := &echo{gate: make(chan struct{})}
+	r, ob, st, _ := setup(t, p, nil)
+	ctx := context.Background()
+	a := &turn.Turn{Session: "s", Channel: "tg", ChatID: "1", Content: "bonjour"}
+	fixed := &turn.Turn{Session: "s", Channel: "tg", ChatID: "1", Source: turn.SourceResume, Content: "ignoré",
+		Meta: map[string]string{turn.MetaReply: "Votre rendez-vous est confirmé."}}
+	_ = r.Submit(ctx, a)
+	waitFor(t, "démarrage", func() bool { return status(t, r, a.ID) == turn.Running })
+	_ = r.Submit(ctx, fixed)
+	time.Sleep(30 * time.Millisecond)
+	if status(t, r, fixed.ID) != turn.Queued {
+		t.Fatal("la réponse fixe doit attendre le tour en cours")
+	}
+	close(p.gate)
+	waitFor(t, "fin", func() bool { return status(t, r, fixed.ID) == turn.Done })
+	if got := ob.texts(); len(got) != 2 || got[0] != "écho: bonjour" || got[1] != "Votre rendez-vous est confirmé." {
+		t.Fatalf("livré : %v", got)
+	}
+	p.mu.Lock()
+	calls := p.calls
+	p.mu.Unlock()
+	if calls != 1 {
+		t.Fatalf("appels au modèle : %d", calls)
+	}
+	s, _ := st.Load(ctx, "s", 0)
+	last := s.Messages[len(s.Messages)-1]
+	if last.Role != llm.RoleAssistant || last.Content != "Votre rendez-vous est confirmé." {
+		t.Fatalf("session : %+v", s.Messages)
+	}
+	if got, _ := r.Queue().Get(ctx, fixed.ID); got.Reply != "Votre rendez-vous est confirmé." {
+		t.Fatalf("issue : %+v", got)
+	}
+}

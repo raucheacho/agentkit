@@ -249,6 +249,11 @@ func (r *Runner) exec(ctx context.Context, t *turn.Turn) {
 		return
 	}
 
+	if text, ok := t.Meta[turn.MetaReply]; ok {
+		r.fixedReply(finishCtx, t, text)
+		return
+	}
+
 	stopTyping := r.typing(ctx, t)
 	in := agent.Input{
 		Conversation: tool.Conversation{Session: t.Session, Channel: t.Channel, ChatID: t.ChatID, Sender: t.Sender, Source: string(t.Source), Turn: t.ID},
@@ -299,13 +304,39 @@ func (r *Runner) exec(ctx context.Context, t *turn.Turn) {
 	errMsg := errText(err)
 	if turn.Silent(t, reply) {
 		r.log.Info("runner : le tour a choisi de ne rien dire", "turn", t.ID, "session", t.Session, "source", t.Source)
-	} else if reply != "" && t.Channel != "" && r.cfg.Outbox != nil {
-		if derr := r.cfg.Outbox.Send(finishCtx, Outbound{Channel: t.Channel, ChatID: t.ChatID, Text: reply, Session: t.Session, TurnID: t.ID, Source: t.Source}); derr != nil {
-			r.log.Error("runner : livraison impossible", "turn", t.ID, "channel", t.Channel, "err", derr)
-			errMsg = strings.TrimSpace(errMsg + " ; livraison : " + derr.Error())
-		}
+	} else {
+		errMsg = r.deliver(finishCtx, t, reply, errMsg)
 	}
 	r.finish(finishCtx, t, status, reply, errMsg, out, err)
+}
+
+// fixedReply exécute un tour à réponse fixe (turn.MetaReply) : le texte est
+// enregistré dans la session puis livré, sans appel au modèle.
+func (r *Runner) fixedReply(ctx context.Context, t *turn.Turn, text string) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		r.finish(ctx, t, turn.Done, "", "", nil, nil)
+		return
+	}
+	if err := r.cfg.Agent.Record(ctx, t.Session, llm.Message{Role: llm.RoleAssistant, Content: text}); err != nil {
+		r.log.Error("runner : réponse fixe non enregistrée", "turn", t.ID, "err", err)
+		r.finish(ctx, t, turn.Failed, "", err.Error(), nil, err)
+		return
+	}
+	r.finish(ctx, t, turn.Done, text, r.deliver(ctx, t, text, ""), nil, nil)
+}
+
+// deliver livre reply à l'interlocuteur du tour, s'il y en a un, et renvoie
+// errMsg complété d'une éventuelle erreur de livraison.
+func (r *Runner) deliver(ctx context.Context, t *turn.Turn, reply, errMsg string) string {
+	if reply == "" || t.Channel == "" || r.cfg.Outbox == nil {
+		return errMsg
+	}
+	if derr := r.cfg.Outbox.Send(ctx, Outbound{Channel: t.Channel, ChatID: t.ChatID, Text: reply, Session: t.Session, TurnID: t.ID, Source: t.Source}); derr != nil {
+		r.log.Error("runner : livraison impossible", "turn", t.ID, "channel", t.Channel, "err", derr)
+		return strings.TrimSpace(errMsg + " ; livraison : " + derr.Error())
+	}
+	return errMsg
 }
 
 func (r *Runner) finish(ctx context.Context, t *turn.Turn, status turn.Status, reply, errMsg string, out *agent.Outcome, err error) {

@@ -105,7 +105,13 @@ type Config struct {
 	AskToolName        string
 	AskToolDescription string
 	Texts              Texts
-	Logger             *slog.Logger
+	// Notice rédige elle-même l'annonce d'une décision (validée et exécutée,
+	// refusée, échouée, expirée) : si elle renvoie un texte, il est livré tel
+	// quel à l'interlocuteur par un tour à réponse fixe (turn.MetaReply), sans
+	// appel au modèle. nil, ou ok = false : le modèle rédige l'annonce à
+	// partir de Texts.Resume. Ne concerne pas les réponses aux questions.
+	Notice func(ctx context.Context, r *Request) (text string, ok bool)
+	Logger *slog.Logger
 }
 
 // Manager applique la politique et suit les demandes.
@@ -392,6 +398,11 @@ func (m *Manager) resumeTurn(ctx context.Context, r *Request) {
 	// à une question, l'agent peut avoir besoin d'agir.
 	if r.Kind == KindApproval {
 		t.Meta[turn.MetaTools] = "none"
+		if m.cfg.Notice != nil {
+			if text, ok := m.cfg.Notice(ctx, r); ok {
+				t.Meta[turn.MetaReply] = text
+			}
+		}
 	}
 	if err := sub.Submit(context.WithoutCancel(ctx), t); err != nil {
 		m.log.Error("trust : tour de reprise non créé", "request", r.ID, "err", err)

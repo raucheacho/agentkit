@@ -20,7 +20,7 @@ Documentation :
 Prérequis : Go 1.26. Pour un essai réel, un modèle : une clé d'API compatible OpenAI, ou [Ollama](https://ollama.com) en local.
 
 ```sh
-go get github.com/raucheacho/agentkit@v0.2.1
+go get github.com/raucheacho/agentkit@v0.3.0
 make test      # tous les tests, avec -race
 ```
 
@@ -78,7 +78,7 @@ Toutes les variables : `docs/configuration.md`.
 
 Chacun est protégé par des tests ; le pourquoi est dans `docs/decisions.md`.
 
-1. **Le prompt système est figé pour la session** ; ce qui change à chaque tour passe par une note éphémère. Seule entorse : la compression, qui archive sans effacer.
+1. **Le prompt système est figé pour la session** ; ce qui change à chaque tour passe par une note éphémère. Entorses : la compression, qui archive sans effacer, et `LiveSystem`, sur demande, qui ne réécrit le prompt que si la configuration a changé.
 2. **Tout est un tour, durable, jamais rejoué** : une session à la fois, un tour interrompu échoue plutôt que de doubler une action.
 3. **Une seule porte décide, pas le modèle** : validation liée aux arguments exacts, exécution unique, l'interlocuteur est prévenu.
 4. **Le contenu extérieur est une donnée** (web, e-mails, MCP, sous-agents, événements), jamais une consigne.
@@ -92,7 +92,7 @@ Chacun est protégé par des tests ; le pourquoi est dans `docs/decisions.md`.
 
 ## Branches
 
-`main` : dernière version publiée (v0.2.1 ; la v0.2 change l'API de la v0.1). `develop` : le travail en cours, fusionné dans `main` à chaque version.
+`main` : dernière version publiée (v0.3.0 ; la v0.2 change l'API de la v0.1). `develop` : le travail en cours, fusionné dans `main` à chaque version.
 
 ## Licence
 

@@ -94,12 +94,14 @@ func (a *Agent) open(ctx context.Context, conv tool.Conversation, in Input) (*tu
 		return nil, fmt.Errorf("agent : lecture de la session %s : %w", conv.Session, err)
 	}
 	system := sess.System
-	if system == "" {
+	if system == "" || a.cfg.LiveSystem {
 		if system, err = a.buildSystem(ctx, conv); err != nil {
 			return nil, err
 		}
-		if err := a.cfg.Sessions.SetSystem(ctx, conv.Session, system); err != nil {
-			return nil, fmt.Errorf("agent : enregistrement du prompt système : %w", err)
+		if system != sess.System {
+			if err := a.cfg.Sessions.SetSystem(ctx, conv.Session, system); err != nil {
+				return nil, fmt.Errorf("agent : enregistrement du prompt système : %w", err)
+			}
 		}
 	}
 

@@ -158,6 +158,41 @@ func TestApproveRunsOnceAndResumes(t *testing.T) {
 	}
 }
 
+// Avec Notice, l'annonce de la décision est un tour à réponse fixe ; sans
+// texte (ok = false), le modèle la rédige comme d'habitude.
+func TestNoticeMakesFixedReply(t *testing.T) {
+	var mu sync.Mutex
+	runs := 0
+	reg := tool.NewRegistry()
+	_ = reg.Add(bookTool(&runs, &mu))
+	sub := &submitter{}
+	m := trust.New(trust.Config{Store: trust.NewMemoryStore(), Tools: reg, Resume: sub,
+		Notice: func(_ context.Context, r *trust.Request) (string, bool) {
+			if r.Status != trust.Executed {
+				return "", false
+			}
+			return "Confirmé : " + r.Result, true
+		}})
+	ctx := tool.WithConversation(context.Background(), tool.Conversation{Session: "tg:1", Channel: "tg", ChatID: "1", Source: "user"})
+	a, _ := call(m, ctx, "book", `{"date":"lundi"}`, tool.Sensitive, nil)
+	b, _ := call(m, ctx, "book", `{"date":"mardi"}`, tool.Sensitive, nil)
+	if _, err := m.Approve(context.Background(), a.Wait.Ref, "patron"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Deny(context.Background(), b.Wait.Ref, "patron", "complet"); err != nil {
+		t.Fatal(err)
+	}
+	if len(sub.turns) != 2 {
+		t.Fatalf("reprises : %d", len(sub.turns))
+	}
+	if got := sub.turns[0].Meta[turn.MetaReply]; got != "Confirmé : RDV REF-42 le lundi pour 1" {
+		t.Fatalf("réponse fixe : %q", got)
+	}
+	if _, ok := sub.turns[1].Meta[turn.MetaReply]; ok || !strings.Contains(sub.turns[1].Content, "complet") {
+		t.Fatalf("refus rédigé par le modèle : %+v", sub.turns[1])
+	}
+}
+
 func TestDenyExpireAndQuestion(t *testing.T) {
 	sub := &submitter{}
 	m := trust.New(trust.Config{Store: trust.NewMemoryStore(), Resume: sub, TTL: time.Hour})

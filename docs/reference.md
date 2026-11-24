@@ -55,6 +55,7 @@ La boucle.
 | `Tools`, `Expose`, `Middleware` | registre vide | outils, filtre par tour, middlewares (la porte en premier) |
 | `Sessions` | en mémoire | historique |
 | `System` | `Texts.Identity` | construit le prompt d'une nouvelle session (signature de `prompt.Builder.Build`) |
+| `LiveSystem` | non | recalcule le prompt à chaque tour, ne le remplace que s'il a changé (configuration modifiée à chaud) |
 | `MaxSteps` | 20 | appels au modèle par tour |
 | `HistoryLimit` | 60 | messages relus (sans compression) |
 | `MaxToolResultChars` | 12 000 | résultat d'outil tronqué (début et fin) |
@@ -79,7 +80,7 @@ La boucle.
 `Turn{ID, Session, Source, Channel, ChatID, Sender, Content, Note, Meta, Status, Reply, Error, MergedInto, CreatedAt, NotBefore, StartedAt, FinishedAt}`.
 - Sources : `SourceUser`, `SourceSchedule`, `SourceEvent`, `SourceTask`, `SourceResume`, `SourceSystem`.
 - Statuts : `Queued`, `Running`, `Done`, `Waiting`, `Failed`, `Cancelled`, `Merged`, `Held`.
-- `Meta` : `MetaTools` (`"none"` = sans outils), `MetaSilence` (jeton de silence) ; `Silent(t, réponse)`.
+- `Meta` : `MetaTools` (`"none"` = sans outils), `MetaSilence` (jeton de silence), `MetaReply` (réponse fixe : livrée et enregistrée telle quelle, sans appel au modèle) ; `Silent(t, réponse)`.
 - `Queue` : `Enqueue`, `Claim`, `TakeQueued`, `Finish`, `Cancel`, `Get`, `List`, `Recover`. `NewMemory()`, **turn/sqlite**, **turn/turntest**.
 
 ## runner — noyau
@@ -112,7 +113,7 @@ La boucle.
 La porte.
 
 - Politique : `Default()` (Read et Write autorisés, Sensitive à valider), `ByEffect(table)`, `Rules(repli, Rule{Tools, Effects, Sources, Channels, Decision, Reason}…)`, `PolicyFunc`. Décisions `Allow`, `Deny`, `Ask`.
-- `trust.New(Config{Store, Tools, Policy, Resume, TTL, ExecTimeout (60 s), Summarize, OnChange, AskToolName ("ask_human"), AskToolDescription, Texts, Logger})`.
+- `trust.New(Config{Store, Tools, Policy, Resume, TTL, ExecTimeout (60 s), Summarize, OnChange, Notice (annonce fixe d'une décision, sans modèle), AskToolName ("ask_human"), AskToolDescription, Texts, Logger})`.
 - `Manager` : `Middleware`, `AskTool`, `Approve(id, par)`, `Deny(id, par, raison)`, `Answer(id, par, réponse)`, `Expire`, `Run`, `Attach`, `Store`.
 - `Request{ID, Kind, Tool, Args, ArgsHash, Summary, Conversation, Status, Result, DecidedBy, CreatedAt, DecidedAt, ExpiresAt}` ; statuts `Pending`, `Approved`, `Executing`, `Executed`, `Failed`, `Denied`, `Answered`, `Expired`.
 - **trust/sqlite**, **trust/trusttest**.

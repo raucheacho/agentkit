@@ -24,7 +24,7 @@ Chaque entrée : contexte → décision → conséquences. Les sources d'inspira
 ## ADR-005 — Prompt figé par session, note éphémère
 - **Contexte** : le cache de prompt des fournisseurs ne sert que si le début de la conversation est identique d'un appel à l'autre (Hermes en fait un invariant).
 - **Décision** : le prompt système est construit à la création de la session et enregistré ; ce qui change à chaque tour (date, fiche, souvenirs rappelés) passe par une note collée au message de l'utilisateur, envoyée au modèle mais jamais enregistrée. L'historique est en ajout seul.
-- **Seule entorse** : la compression (ADR-011). `RefreshSystem` permet un recalcul explicite.
+- **Entorses** : la compression (ADR-011) ; `RefreshSystem` (recalcul explicite) ; `LiveSystem` (ADR-026), sur demande.
 
 ## ADR-006 — Contenu non fiable délimité
 - **Décision** : un résultat `tool.External` (web, e-mail, MCP, compte rendu de sous-agent, événement) est entouré de `<untrusted_data source="…">`, une balise de fin injectée dans le contenu est neutralisée, et le prompt système interdit d'obéir à ce qu'il contient.
@@ -108,3 +108,13 @@ Chaque entrée : contexte → décision → conséquences. Les sources d'inspira
 - **Décision** : Apache-2.0, comme VectixDB. Permissive (un framework n'a de valeur que s'il est adopté ; persibot et les autres applications restent libres de leur licence), avec une licence explicite sur les brevets et un `NOTICE` à conserver.
 - **Écartées** : MIT (rien sur les brevets) ; AGPL (oblige tout service bâti dessus à publier son code, frein à l'adoption).
 - **Détail** : `contrib/vectix` est un module à part ; il porte sa propre copie de `LICENSE` et `NOTICE`, car l'archive d'un module Go n'inclut pas les fichiers du module parent.
+
+## ADR-025 — Tour à réponse fixe, annonce des décisions par l'application
+- **Contexte** : persibot prévient le client d'une décision du patron par un message écrit par le module (« Votre rendez-vous du 12/12 à 10 h est confirmé »), fiable même avec un petit modèle. Avec agentkit, le tour de reprise faisait toujours rédiger l'annonce par le modèle.
+- **Décision** : `turn.MetaReply` : le runner livre le texte tel quel et l'enregistre dans la session comme réponse de l'agent, sans appel au modèle, dans l'ordre de la session. `trust.Config.Notice` (et `kit.Trust.Notice`) rédige l'annonce d'une décision ; sans texte, le modèle la rédige comme avant.
+- **Pourquoi un tour** : l'annonce reste durable, ordonnée après le tour en cours et visible dans l'historique (le modèle sait au tour suivant ce qui a été annoncé).
+
+## ADR-026 — Prompt système vivant, sur demande
+- **Contexte** : persibot change ses Instructions et ses modules à chaud depuis le tableau de bord ; avec un prompt figé (ADR-005), le changement n'atteignait pas les conversations ouvertes.
+- **Décision** : `agent.Config.LiveSystem` (et `kit.Config.LiveSystem`) recalcule le prompt à chaque tour et ne le remplace **que s'il a changé** : le cache du fournisseur n'est perdu qu'au changement réel. Désactivé par défaut.
+- **Condition** : les sections doivent être stables d'un tour à l'autre ; ce qui varie (heure, fiche, souvenirs) reste dans la note.

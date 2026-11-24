@@ -50,6 +50,12 @@ const MetaTools = "tools"
 // décident eux-mêmes s'il y a lieu de prévenir.
 const MetaSilence = "silence"
 
+// MetaReply est la clé de Meta d'un tour à réponse fixe : son texte est livré
+// tel quel et enregistré dans la session comme réponse de l'agent, sans appel
+// au modèle (annonce d'une décision rédigée par l'application…). Le tour garde
+// l'ordre de la session : il passe après le tour en cours.
+const MetaReply = "reply"
+
 // Silent indique si reply est un silence pour t (voir MetaSilence).
 func Silent(t *Turn, reply string) bool {
 	tok := t.Meta[MetaSilence]

@@ -101,8 +101,15 @@ type Config struct {
 	Sessions session.Store
 	// System calcule le prompt système d'une nouvelle session (nil :
 	// Texts.Identity). Il n'est appelé qu'à la création de la session ou
-	// après RefreshSystem.
+	// après RefreshSystem, sauf avec LiveSystem.
 	System func(ctx context.Context, conv tool.Conversation) (string, error)
+	// LiveSystem recalcule le prompt système à chaque tour et ne le remplace
+	// que s'il a changé : un changement de configuration (instructions,
+	// modules activés) s'applique au tour suivant de chaque session, et le
+	// cache de prompt du fournisseur n'est perdu que lors d'un vrai
+	// changement. System doit alors être stable d'un tour à l'autre (ni
+	// heure ni contenu propre au message : ils vont dans la note).
+	LiveSystem bool
 
 	// MaxSteps borne le nombre d'appels au modèle par tour (défaut 20).
 	MaxSteps int
