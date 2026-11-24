@@ -36,11 +36,15 @@ type Message struct {
 }
 
 // ToolCall est un appel d'outil émis par le modèle. Arguments est le JSON brut
-// tel que le modèle l'a écrit, éventuellement invalide.
+// tel que le modèle l'a écrit, éventuellement invalide. Extra porte des
+// données opaques du fournisseur à lui renvoyer telles quelles avec l'appel
+// (par exemple la signature de raisonnement de Gemini) : il est conservé dans
+// l'historique et n'est jamais interprété.
 type ToolCall struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Arguments string          `json:"arguments"`
+	Extra     json.RawMessage `json:"extra,omitempty"`
 }
 
 // ToolSpec décrit un outil au modèle. Parameters est un JSON Schema complet,

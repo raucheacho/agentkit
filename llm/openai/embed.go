@@ -49,7 +49,7 @@ func (e *Embedder) Embed(ctx context.Context, texts []string) ([][]float32, erro
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, e.p.statusError(resp.StatusCode, raw)
+		return nil, e.p.statusError(resp, raw)
 	}
 	var out struct {
 		Data []struct {

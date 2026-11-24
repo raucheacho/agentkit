@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -67,6 +68,12 @@ func DeepSeek(apiKey, model string) Config {
 	return Config{Name: "deepseek", BaseURL: "https://api.deepseek.com/v1", APIKey: apiKey, Model: model}
 }
 
+// Gemini renvoie la configuration de l'API Gemini de Google (Google AI
+// Studio), par son point d'accès compatible OpenAI.
+func Gemini(apiKey, model string) Config {
+	return Config{Name: "gemini", BaseURL: "https://generativelanguage.googleapis.com/v1beta/openai", APIKey: apiKey, Model: model}
+}
+
 // Ollama renvoie la configuration d'un serveur Ollama local (API /v1).
 func Ollama(baseURL, model string) Config {
 	if baseURL == "" {
@@ -87,6 +94,8 @@ type wireToolCall struct {
 	ID       string       `json:"id,omitempty"`
 	Type     string       `json:"type,omitempty"`
 	Function wireFunction `json:"function"`
+	// ExtraContent (Gemini) doit revenir tel quel avec l'appel.
+	ExtraContent json.RawMessage `json:"extra_content,omitempty"`
 }
 
 type wireMessage struct {
@@ -139,9 +148,16 @@ type wireResponse struct {
 		FinishReason *string     `json:"finish_reason"`
 	} `json:"choices"`
 	Usage *wireUsage `json:"usage"`
-	Error *struct {
-		Message string `json:"message"`
-	} `json:"error"`
+	Error *wireError `json:"error"`
+}
+
+type wireError struct {
+	Message string `json:"message"`
+	// Details (Google) : RetryInfo donne le délai avant une nouvelle tentative.
+	Details []struct {
+		Type       string `json:"@type"`
+		RetryDelay string `json:"retryDelay"`
+	} `json:"details"`
 }
 
 func (u *wireUsage) usage() llm.Usage {
@@ -173,7 +189,7 @@ func toWire(req *llm.Request, model string, stream bool) wireRequest {
 			if strings.TrimSpace(args) == "" {
 				args = "{}"
 			}
-			wm.ToolCalls = append(wm.ToolCalls, wireToolCall{ID: tc.ID, Type: "function", Function: wireFunction{Name: tc.Name, Arguments: args}})
+			wm.ToolCalls = append(wm.ToolCalls, wireToolCall{ID: tc.ID, Type: "function", Function: wireFunction{Name: tc.Name, Arguments: args}, ExtraContent: tc.Extra})
 		}
 		w.Messages = append(w.Messages, wm)
 	}
@@ -203,7 +219,7 @@ func fromWire(m wireMessage) llm.Message {
 		out.Content = *m.Content
 	}
 	for _, tc := range m.ToolCalls {
-		out.ToolCalls = append(out.ToolCalls, llm.ToolCall{ID: tc.ID, Name: tc.Function.Name, Arguments: tc.Function.Arguments})
+		out.ToolCalls = append(out.ToolCalls, llm.ToolCall{ID: tc.ID, Name: tc.Function.Name, Arguments: tc.Function.Arguments, Extra: tc.ExtraContent})
 	}
 	return out
 }
@@ -236,7 +252,7 @@ func (p *Provider) post(ctx context.Context, body wireRequest) (*http.Response, 
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-		return nil, p.statusError(resp.StatusCode, raw)
+		return nil, p.statusError(resp, raw)
 	}
 	return resp, nil
 }
@@ -250,16 +266,38 @@ func (p *Provider) headers(r *http.Request) {
 	}
 }
 
-func (p *Provider) statusError(status int, raw []byte) error {
+func (p *Provider) statusError(resp *http.Response, raw []byte) error {
 	msg := strings.TrimSpace(string(raw))
 	var wr wireResponse
-	if json.Unmarshal(raw, &wr) == nil && wr.Error != nil && wr.Error.Message != "" {
-		msg = wr.Error.Message
+	// Google enveloppe l'erreur dans un tableau.
+	var list []wireResponse
+	if json.Unmarshal(raw, &list) == nil && len(list) > 0 {
+		wr = list[0]
+	} else {
+		_ = json.Unmarshal(raw, &wr)
+	}
+	var after time.Duration
+	if wr.Error != nil {
+		if wr.Error.Message != "" {
+			msg = wr.Error.Message
+		}
+		for _, d := range wr.Error.Details {
+			if v, err := time.ParseDuration(d.RetryDelay); err == nil && d.RetryDelay != "" {
+				after = v
+			}
+		}
+	}
+	if s := resp.Header.Get("Retry-After"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil {
+			after = time.Duration(n) * time.Second
+		} else if t, err := http.ParseTime(s); err == nil {
+			after = time.Until(t)
+		}
 	}
 	if len(msg) > 500 {
 		msg = msg[:500] + "…"
 	}
-	return &llm.StatusError{Provider: p.cfg.Name, Status: status, Message: msg}
+	return &llm.StatusError{Provider: p.cfg.Name, Status: resp.StatusCode, Message: msg, RetryAfter: max(after, 0)}
 }
 
 // Chat envoie une requête et attend la réponse complète.
@@ -359,6 +397,13 @@ func (p *Provider) Stream(ctx context.Context, req *llm.Request) (<-chan llm.Str
 				idx := i
 				if tc.Index != nil {
 					idx = *tc.Index
+				} else if prev, ok := calls[idx]; ok && tc.ID != "" && prev.ID != "" && prev.ID != tc.ID {
+					// Sans index (Gemini), chaque appel arrive entier avec son
+					// propre identifiant : un nouvel identifiant est un nouvel appel.
+					idx = len(calls)
+					for calls[idx] != nil {
+						idx++
+					}
 				}
 				cur, ok := calls[idx]
 				if !ok {
@@ -370,6 +415,9 @@ func (p *Provider) Stream(ctx context.Context, req *llm.Request) (<-chan llm.Str
 				}
 				cur.Name += tc.Function.Name
 				cur.Arguments += tc.Function.Arguments
+				if len(tc.ExtraContent) > 0 {
+					cur.Extra = tc.ExtraContent
+				}
 			}
 		}
 		if err := sc.Err(); err != nil {
@@ -405,7 +453,7 @@ func (p *Provider) ListModels(ctx context.Context) ([]string, error) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-		return nil, p.statusError(resp.StatusCode, raw)
+		return nil, p.statusError(resp, raw)
 	}
 	var out struct {
 		Data []struct {

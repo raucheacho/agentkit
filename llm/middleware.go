@@ -6,8 +6,14 @@ import (
 	"time"
 )
 
+// MaxRetryAfter est l'attente la plus longue que Retry accepte quand le
+// service indique lui-même quand réessayer (StatusError.RetryAfter). Au-delà
+// (quota du jour épuisé, par exemple), l'erreur est renvoyée tout de suite.
+var MaxRetryAfter = time.Minute
+
 // Retry réessaie les erreurs transitoires (voir Transient) avec un délai
-// exponentiel. Une requête qui a réussi n'est jamais rejouée. Si p sait
+// exponentiel, ou le délai demandé par le service s'il en donne un (jusqu'à
+// MaxRetryAfter). Une requête qui a réussi n'est jamais rejouée. Si p sait
 // répondre en flux, le Provider renvoyé aussi : seule l'ouverture du flux est
 // réessayée, jamais un flux déjà commencé.
 func Retry(p Provider, attempts int, baseDelay time.Duration) Provider {
@@ -46,8 +52,16 @@ func (r *retry) do(ctx context.Context, f func() error) error {
 		if err = f(); err == nil || !Transient(err) || i == r.attempts-1 {
 			return err
 		}
+		wait := delay
+		var se *StatusError
+		if errors.As(err, &se) && se.RetryAfter > 0 {
+			if se.RetryAfter > MaxRetryAfter {
+				return err
+			}
+			wait = max(wait, se.RetryAfter)
+		}
 		select {
-		case <-time.After(delay):
+		case <-time.After(wait):
 		case <-ctx.Done():
 			return ctx.Err()
 		}

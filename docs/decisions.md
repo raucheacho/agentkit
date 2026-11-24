@@ -118,3 +118,8 @@ Chaque entrée : contexte → décision → conséquences. Les sources d'inspira
 - **Contexte** : persibot change ses Instructions et ses modules à chaud depuis le tableau de bord ; avec un prompt figé (ADR-005), le changement n'atteignait pas les conversations ouvertes.
 - **Décision** : `agent.Config.LiveSystem` (et `kit.Config.LiveSystem`) recalcule le prompt à chaque tour et ne le remplace **que s'il a changé** : le cache du fournisseur n'est perdu qu'au changement réel. Désactivé par défaut.
 - **Condition** : les sections doivent être stables d'un tour à l'autre ; ce qui varie (heure, fiche, souvenirs) reste dans la note.
+
+## ADR-027 — Données opaques des appels d'outils, délai demandé par le fournisseur
+- **Contexte** : premier essai avec un modèle capable (Gemini 3, API compatible OpenAI). Gemini joint à chaque appel d'outil une signature de raisonnement (`extra_content`) et refuse (400) un historique qui ne la renvoie pas. Sur une limite de débit, il indique le délai à attendre (`RetryInfo`), qu'agentkit ignorait : trois essais en 3 s, puis échec.
+- **Décision** : `llm.ToolCall.Extra` (JSON brut) garde ce que le fournisseur attache à un appel ; il est stocké avec l'historique et renvoyé tel quel, jamais interprété. `llm.StatusError.RetryAfter` porte le délai demandé (`Retry-After` ou `RetryInfo`) ; `llm.Retry` l'attend jusqu'à `MaxRetryAfter` (1 min) et renvoie l'erreur tout de suite au-delà (quota du jour épuisé : attendre ne sert à rien).
+- **Écarté** : un paquet `llm/gemini` sur l'API native : le point d'accès compatible OpenAI suffit avec ces deux ajouts génériques, qui servent aussi à d'autres fournisseurs.

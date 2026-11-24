@@ -5,6 +5,7 @@
 | Fournisseur | Comment | Vérifié |
 |---|---|---|
 | Ollama (local) | `openai.Ollama("", "llama3.1:8b")` ; embeddings `nomic-embed-text` | essais réels de toutes les phases (`llama3.1:8b`) |
+| Google Gemini | `openai.Gemini(clé, modèle)` | essai réel (2026-11-24) : `gemini-3-flash-preview` (exemple `cli`, scénarios catalogue, rupture, suivi) et `gemini-3.5-flash-lite` (tous les scénarios de `support`) ; Gemini 3 exige le renvoi de la signature des appels d'outils (`ToolCall.Extra`) |
 | OpenAI | `openai.Config{APIKey, Model}` | tests avec faux serveur |
 | Groq | `openai.Groq(clé, modèle)` | tests avec faux serveur |
 | OpenRouter | `openai.OpenRouter(clé, modèle)` | tests avec faux serveur |

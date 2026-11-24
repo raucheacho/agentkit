@@ -69,3 +69,21 @@ func TestFallback(t *testing.T) {
 		t.Fatal("annulation non transitoire")
 	}
 }
+
+// Le délai demandé par le service est respecté ; s'il dépasse MaxRetryAfter
+// (quota du jour épuisé), on n'attend pas : l'erreur est renvoyée tout de suite.
+func TestRetryHonorsRetryAfter(t *testing.T) {
+	f := &flaky{fails: 1, err: &StatusError{Status: 429, RetryAfter: 50 * time.Millisecond}}
+	start := time.Now()
+	if _, err := Retry(f, 3, time.Millisecond).Chat(context.Background(), &Request{}); err != nil || f.calls != 2 {
+		t.Fatalf("err=%v calls=%d", err, f.calls)
+	}
+	if time.Since(start) < 50*time.Millisecond {
+		t.Fatal("le délai demandé n'a pas été respecté")
+	}
+	f = &flaky{fails: 5, err: &StatusError{Status: 429, RetryAfter: 20 * time.Hour}}
+	start = time.Now()
+	if _, err := Retry(f, 3, time.Millisecond).Chat(context.Background(), &Request{}); err == nil || f.calls != 1 || time.Since(start) > time.Second {
+		t.Fatalf("quota épuisé : err=%v calls=%d", err, f.calls)
+	}
+}

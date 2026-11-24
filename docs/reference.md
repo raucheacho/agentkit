@@ -8,12 +8,13 @@ Contrat neutre avec un modèle.
 | Élément | Rôle |
 |---|---|
 | `Message{Role, Content, ToolCalls, ToolCallID, Name, Reasoning}` | un message ; rôles `RoleSystem`, `RoleUser`, `RoleAssistant`, `RoleTool` |
+| `ToolCall{ID, Name, Arguments, Extra}` | un appel d'outil ; `Extra` : données opaques du fournisseur, renvoyées telles quelles (signature de raisonnement de Gemini) |
 | `Request{Model, Messages, Tools, ToolChoice, Temperature, MaxTokens}` / `Response{Message, Usage, FinishReason, Model}` | un appel |
 | `Provider` (`Chat`), `Streamer` (`Stream`), `ModelLister` | ce qu'un fournisseur implémente ; `ProviderFunc` pour les tests |
 | `Usage{InputTokens, OutputTokens, CachedTokens}` | jetons consommés |
-| `Retry(p, essais, délai)` | réessaie les erreurs passagères (408, 409, 425, 429, 5xx, 529, réseau) ; pour un flux, seulement l'ouverture |
+| `Retry(p, essais, délai)` | réessaie les erreurs passagères (408, 409, 425, 429, 5xx, 529, réseau) ; pour un flux, seulement l'ouverture ; respecte le délai demandé par le service jusqu'à `MaxRetryAfter` (1 min), au-delà renvoie l'erreur sans attendre |
 | `Fallback(p1, p2, …)` | passe au fournisseur suivant sur erreur passagère |
-| `StatusError`, `Transient(err)` | erreur HTTP typée ; erreur passagère ou non (une annulation ne l'est jamais) |
+| `StatusError{Provider, Status, Message, RetryAfter}`, `Transient(err)` | erreur HTTP typée (`RetryAfter` : en-tête `Retry-After` ou `RetryInfo` de Google) ; erreur passagère ou non (une annulation ne l'est jamais) |
 | `TrimHistory`, `SanitizeHistory` | coupe l'historique à une frontière de tour ; répare les appels d'outils sans réponse |
 | `Embedder`, `EmbedderFunc`, `Cosine` | vecteurs (recherche sémantique) |
 
@@ -21,9 +22,9 @@ Contrat neutre avec un modèle.
 Tout fournisseur compatible `/chat/completions` et `/embeddings`.
 
 - `openai.New(Config{Name, BaseURL, APIKey, Model, Headers, HTTPClient})` : `Chat`, `Stream` (appels d'outils assemblés, usage final), `ListModels`.
-- Préréglages : `openai.Groq(clé, modèle)`, `OpenRouter`, `DeepSeek`, `Ollama(url, modèle)` (défaut `http://localhost:11434/v1`).
+- Préréglages : `openai.Groq(clé, modèle)`, `OpenRouter`, `DeepSeek`, `Gemini` (Google AI Studio, point d'accès compatible OpenAI), `Ollama(url, modèle)` (défaut `http://localhost:11434/v1`).
 - `openai.NewEmbedder(cfg, modèle)` : embeddings (`text-embedding-3-small`, `nomic-embed-text`…).
-- Lit `reasoning_content` / `reasoning` et les jetons en cache ; transmet le schéma des outils tel quel.
+- Lit `reasoning_content` / `reasoning` et les jetons en cache ; transmet le schéma des outils tel quel ; garde et renvoie `extra_content` des appels d'outils (Gemini) ; assemble les appels sans `index` du flux de Gemini.
 
 ## tool — noyau
 Les outils.

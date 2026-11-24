@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 )
 
 // StatusError est une erreur HTTP d'un fournisseur. Elle garde le statut et la
@@ -15,6 +16,10 @@ type StatusError struct {
 	Provider string
 	Status   int
 	Message  string
+	// RetryAfter est le délai demandé par le service avant une nouvelle
+	// tentative (en-tête Retry-After, RetryInfo de Google) ; 0 s'il n'en
+	// donne pas.
+	RetryAfter time.Duration
 }
 
 func (e *StatusError) Error() string {

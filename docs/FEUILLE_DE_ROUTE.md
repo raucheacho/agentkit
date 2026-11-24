@@ -26,8 +26,8 @@ Chaque phase a été vérifiée par ses tests (`-race`, désormais aussi en CI),
 | 0.1 | ~~CI~~ | fait : `.github/workflows/ci.yml` (`gofmt`, `go vet`, `go test -race` sur Linux et macOS ; tests Docker sur Linux, qui échouent au lieu de sauter grâce à `AGENTKIT_REQUIRE_DOCKER`) | — |
 | 0.2 | ~~Fusion et version~~ | fait : `develop` fusionné dans `main`, tag `v0.2.0` | — |
 | 0.3 | ~~VectixDB publié~~ | fait : `contrib/vectix` dépend de VectixDB `bindings/go` v0.1.0 publié (bibliothèques compilées incluses), job CI, tag `contrib/vectix/v0.1.0` | — |
-| 0.4 | Essai avec un modèle capable | rejouer les scénarios des exemples avec un modèle de la taille d'un GPT-4o : les écarts restants deviennent des tâches (les essais 8B mélangent défauts du modèle et du framework) | S |
-| 0.5 | ~~Licence~~ | fait : Apache-2.0 (`LICENSE`, `NOTICE`, aussi dans `contrib/vectix`) ; le dépôt reste privé, le rendre public est une décision à part | — |
+| 0.4 | Essai avec un modèle capable | commencé avec Gemini (2026-11-24) : signature des appels d'outils et délai de nouvelle tentative corrigés (ADR-027) ; tous les scénarios de `support` passent avec `gemini-3.5-flash-lite`. Reste : rejouer avec `gemini-3-flash-preview` au complet (quota gratuit de 20 requêtes par jour) et l'exemple `assistant`. Écarts relevés : le modèle répond parfois à la place du responsable au lieu de lui poser la question (chantier 5) ; `/admin/requests` renvoie `trust.Request` sans tags JSON (`ID`, `Kind`…) | S |
+| 0.5 | ~~Licence~~ | fait : Apache-2.0 (`LICENSE`, `NOTICE`, aussi dans `contrib/vectix`) ; dépôt public depuis le 2026-11-24 | — |
 
 ## 1. Le navigateur de l'agent — L
 

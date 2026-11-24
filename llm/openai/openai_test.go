@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/raucheacho/agentkit/llm"
 )
@@ -124,5 +125,95 @@ func TestStreamAssemblesToolCalls(t *testing.T) {
 	}
 	if final.Usage.InputTokens != 5 || final.FinishReason != "tool_calls" {
 		t.Fatalf("final : %+v", final)
+	}
+}
+
+// Gemini (API compatible OpenAI) : les appels arrivent entiers, sans index,
+// avec une signature (extra_content) à renvoyer telle quelle avec l'appel.
+func TestGeminiToolCallsRoundTrip(t *testing.T) {
+	var second map[string]any
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 2 {
+			_ = json.NewDecoder(r.Body).Decode(&second)
+			_, _ = io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`)
+			return
+		}
+		for _, c := range []string{
+			`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"extra_content":{"google":{"thought_signature":"SIG1"}},"function":{"arguments":"{\"q\":\"a\"}","name":"search"},"id":"c1","type":"function"}]},"index":0}]}`,
+			`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"function":{"arguments":"{\"q\":\"b\"}","name":"search"},"id":"c2","type":"function"}]},"index":0}]}`,
+			`{"choices":[{"delta":{"role":"assistant"},"finish_reason":"stop","index":0}]}`,
+		} {
+			_, _ = io.WriteString(w, "data: "+c+"\n\n")
+		}
+		_, _ = io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	p := New(Config{BaseURL: srv.URL})
+	ch, err := p.Stream(context.Background(), &llm.Request{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var final *llm.Response
+	for ev := range ch {
+		if ev.Err != nil {
+			t.Fatal(ev.Err)
+		}
+		if ev.Response != nil {
+			final = ev.Response
+		}
+	}
+	tc := final.Message.ToolCalls
+	if len(tc) != 2 || tc[0].ID != "c1" || tc[1].ID != "c2" || tc[0].Arguments != `{"q":"a"}` || tc[1].Arguments != `{"q":"b"}` {
+		t.Fatalf("appels : %+v", tc)
+	}
+	if string(tc[0].Extra) != `{"google":{"thought_signature":"SIG1"}}` || tc[1].Extra != nil {
+		t.Fatalf("signature : %s / %s", tc[0].Extra, tc[1].Extra)
+	}
+
+	// L'historique stocké (JSON) puis renvoyé garde la signature.
+	b, _ := json.Marshal(final.Message)
+	var stored llm.Message
+	_ = json.Unmarshal(b, &stored)
+	if _, err := p.Chat(context.Background(), &llm.Request{Messages: []llm.Message{
+		{Role: llm.RoleUser, Content: "cherche"}, stored,
+		{Role: llm.RoleTool, ToolCallID: "c1", Content: "A"}, {Role: llm.RoleTool, ToolCallID: "c2", Content: "B"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	sent := second["messages"].([]any)[1].(map[string]any)["tool_calls"].([]any)
+	extra, _ := json.Marshal(sent[0].(map[string]any)["extra_content"])
+	if string(extra) != `{"google":{"thought_signature":"SIG1"}}` {
+		t.Fatalf("signature renvoyée : %s", extra)
+	}
+	if _, ok := sent[1].(map[string]any)["extra_content"]; ok {
+		t.Fatal("pas de signature inventée")
+	}
+}
+
+// Erreur Google : enveloppée dans un tableau, délai dans RetryInfo ; ailleurs,
+// l'en-tête Retry-After.
+func TestStatusErrorRetryAfter(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/h/") {
+			w.Header().Set("Retry-After", "7")
+			w.WriteHeader(429)
+			_, _ = io.WriteString(w, `{"error":{"message":"trop vite"}}`)
+			return
+		}
+		w.WriteHeader(429)
+		_, _ = io.WriteString(w, `[{"error":{"code":429,"message":"Quota exceeded","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.Help"},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"41s"}]}}]`)
+	}))
+	defer srv.Close()
+	var se *llm.StatusError
+	_, err := New(Config{BaseURL: srv.URL}).Chat(context.Background(), &llm.Request{})
+	if !errors.As(err, &se) || se.Status != 429 || se.Message != "Quota exceeded" || se.RetryAfter != 41*time.Second {
+		t.Fatalf("Google : %#v", err)
+	}
+	_, err = New(Config{BaseURL: srv.URL + "/h"}).Chat(context.Background(), &llm.Request{})
+	if !errors.As(err, &se) || se.Message != "trop vite" || se.RetryAfter != 7*time.Second {
+		t.Fatalf("Retry-After : %#v", err)
 	}
 }
