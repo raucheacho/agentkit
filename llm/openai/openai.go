@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"sort"
 	"strconv"
@@ -48,9 +49,26 @@ func New(cfg Config) *Provider {
 	cfg.BaseURL = strings.TrimRight(cfg.BaseURL, "/")
 	hc := cfg.HTTPClient
 	if hc == nil {
-		hc = &http.Client{Timeout: 180 * time.Second}
+		hc = defaultHTTPClient()
 	}
 	return &Provider{cfg: cfg, http: hc}
+}
+
+// defaultHTTPClient borne chaque étape d'un appel : une connexion perdue en
+// route (réseau instable, connexion HTTP/2 morte) devient vite une erreur
+// passagère, que llm.Retry rejoue, au lieu de bloquer le tour jusqu'au délai
+// global.
+func defaultHTTPClient() *http.Client {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.DialContext = (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext
+	tr.TLSHandshakeTimeout = 10 * time.Second
+	// Sans flux, la réponse entière précède les en-têtes : laisser au modèle
+	// le temps de rédiger.
+	tr.ResponseHeaderTimeout = 120 * time.Second
+	// Connexion silencieuse 15 s : ping ; sans réponse en 10 s, elle est
+	// fermée et les requêtes en cours échouent.
+	tr.HTTP2 = &http.HTTP2Config{SendPingTimeout: 15 * time.Second, PingTimeout: 10 * time.Second}
+	return &http.Client{Transport: tr, Timeout: 180 * time.Second}
 }
 
 // Groq renvoie la configuration de Groq.
