@@ -120,6 +120,28 @@ type Manager struct {
 	log    *slog.Logger
 	mu     sync.Mutex
 	resume Submitter
+
+	// La récupération des actions interrompues par un arrêt précédent a lieu
+	// une seule fois, avant toute exécution de ce processus : sinon une
+	// décision prise avant Run serait prise pour une action interrompue.
+	recovery    sync.Once
+	recoveryErr error
+}
+
+// recoverOnce passe en échec, une seule fois, les actions restées en cours
+// d'exécution après l'arrêt précédent.
+func (m *Manager) recoverOnce(ctx context.Context) error {
+	m.recovery.Do(func() {
+		n, err := m.cfg.Store.Recover(ctx)
+		if err != nil {
+			m.recoveryErr = err
+			return
+		}
+		if n > 0 {
+			m.log.Warn("trust : actions interrompues par l'arrêt précédent, non relancées", "count", n)
+		}
+	})
+	return m.recoveryErr
 }
 
 // New crée un Manager.
@@ -246,6 +268,9 @@ func (m *Manager) AskTool() tool.Tool {
 // exacts) s'exécute une seule fois, puis un tour de reprise informe
 // l'interlocuteur. Une seconde décision sur la même demande échoue (ErrNotPending).
 func (m *Manager) Approve(ctx context.Context, id, by string) (*Request, error) {
+	if err := m.recoverOnce(ctx); err != nil {
+		return nil, err
+	}
 	r, err := m.decide(ctx, id, KindApproval, Approved, by, "")
 	if err != nil {
 		return nil, err
@@ -363,10 +388,8 @@ func (m *Manager) expire(ctx context.Context, r *Request) bool {
 // Run fait expirer les demandes chaque minute jusqu'à l'annulation de ctx,
 // après avoir marqué en échec les actions interrompues par un arrêt brutal.
 func (m *Manager) Run(ctx context.Context) error {
-	if n, err := m.cfg.Store.Recover(ctx); err != nil {
+	if err := m.recoverOnce(ctx); err != nil {
 		return err
-	} else if n > 0 {
-		m.log.Warn("trust : actions interrompues par l'arrêt précédent, non relancées", "count", n)
 	}
 	tick := time.NewTicker(time.Minute)
 	defer tick.Stop()

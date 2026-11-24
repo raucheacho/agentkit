@@ -193,6 +193,52 @@ func TestNoticeMakesFixedReply(t *testing.T) {
 	}
 }
 
+// Une décision prise avant Run (requête HTTP arrivée tôt) n'est pas prise
+// pour une action interrompue par l'arrêt précédent ; celles-ci, en revanche,
+// sont bien passées en échec avant la première exécution.
+func TestDecisionBeforeRun(t *testing.T) {
+	store := trust.NewMemoryStore()
+	ctx := tool.WithConversation(context.Background(), tool.Conversation{Session: "tg:1", Channel: "tg", ChatID: "1", Source: "user"})
+
+	// Processus précédent : une action est restée en cours d'exécution.
+	prev := trust.New(trust.Config{Store: store})
+	old, _ := call(prev, ctx, "book", `{"date":"jeudi"}`, tool.Sensitive, nil)
+	if _, err := store.Transition(context.Background(), old.Wait.Ref, trust.Pending, trust.Approved, "patron", "", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Transition(context.Background(), old.Wait.Ref, trust.Approved, trust.Executing, "", "", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	started, release := make(chan struct{}), make(chan struct{})
+	reg := tool.NewRegistry()
+	_ = reg.Add(tool.New("book", "Réserve.", func(context.Context, bookIn) (tool.Result, error) {
+		close(started)
+		<-release
+		return tool.Text("RDV"), nil
+	}, tool.WithEffect(tool.Sensitive)))
+	m := trust.New(trust.Config{Store: store, Tools: reg})
+	res, _ := call(m, ctx, "book", `{"date":"lundi"}`, tool.Sensitive, nil)
+
+	done := make(chan error, 1)
+	go func() { _, err := m.Approve(context.Background(), res.Wait.Ref, "patron"); done <- err }()
+	<-started
+	runCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = m.Run(runCtx) }()
+	time.Sleep(50 * time.Millisecond) // laisse Run démarrer pendant l'exécution
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatalf("décision prise avant Run : %v", err)
+	}
+	if r, _ := store.Get(context.Background(), res.Wait.Ref); r.Status != trust.Executed {
+		t.Fatalf("action en cours : %s", r.Status)
+	}
+	if r, _ := store.Get(context.Background(), old.Wait.Ref); r.Status != trust.Failed {
+		t.Fatalf("action du processus précédent : %s", r.Status)
+	}
+}
+
 func TestDenyExpireAndQuestion(t *testing.T) {
 	sub := &submitter{}
 	m := trust.New(trust.Config{Store: trust.NewMemoryStore(), Resume: sub, TTL: time.Hour})
