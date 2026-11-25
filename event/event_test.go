@@ -14,6 +14,7 @@ import (
 	"github.com/raucheacho/agentkit/agent"
 	"github.com/raucheacho/agentkit/llm"
 	"github.com/raucheacho/agentkit/tool"
+	"github.com/raucheacho/agentkit/turn"
 )
 
 func TestBusFanOutReplayAndDrops(t *testing.T) {
@@ -139,5 +140,22 @@ func TestSSE(t *testing.T) {
 	}
 	if strings.Join(got, ",") != "avant,après" {
 		t.Fatalf("flux : %v", got)
+	}
+}
+
+// Une réponse non livrée se lit dans un champ typé de l'événement Finished.
+func TestFinishedCarriesUndelivered(t *testing.T) {
+	b := NewBus(Config{})
+	ch, cancel := b.Subscribe(func(e Event) bool { return e.Kind == Finished })
+	defer cancel()
+	b.Runner()(context.Background(), &turn.Turn{ID: "t1", Channel: "tg", Status: turn.Done, Reply: "ok",
+		Undelivered: "bot bloqué"}, nil, nil)
+	select {
+	case ev := <-ch:
+		if ev.Undelivered != "bot bloqué" || ev.Error != "" {
+			t.Fatalf("événement : %+v", ev)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("aucun événement")
 	}
 }

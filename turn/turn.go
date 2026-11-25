@@ -56,6 +56,11 @@ const MetaSilence = "silence"
 // l'ordre de la session : il passe après le tour en cours.
 const MetaReply = "reply"
 
+// MetaNoFailureReply ("true") : un échec de ce tour ne renvoie pas le message
+// d'indisponibilité (runner.Config.FailureReply) ; sert au nouvel essai d'un
+// tour dont l'interlocuteur l'a déjà reçu.
+const MetaNoFailureReply = "no_failure_reply"
+
 // Silent indique si reply est un silence pour t (voir MetaSilence).
 func Silent(t *Turn, reply string) bool {
 	tok := t.Meta[MetaSilence]
@@ -86,6 +91,10 @@ type Turn struct {
 	Status Status
 	Reply  string
 	Error  string
+	// Undelivered : pourquoi la réponse n'a pas pu être livrée (canal en
+	// panne…) ; vide si elle l'a été ou s'il n'y avait rien à livrer. Rempli
+	// par le runner à la fin du tour, pour le crochet OnFinish ; non conservé.
+	Undelivered string
 	// MergedInto : tour qui a absorbé celui-ci (Status Merged).
 	MergedInto string
 

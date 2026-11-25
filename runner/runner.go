@@ -296,7 +296,7 @@ func (r *Runner) exec(ctx context.Context, t *turn.Turn) {
 	default:
 		status = turn.Failed
 		r.log.Error("runner : tour en échec", "turn", t.ID, "session", t.Session, "err", err)
-		if t.Source == turn.SourceUser {
+		if t.Source == turn.SourceUser && t.Meta[turn.MetaNoFailureReply] != "true" {
 			reply = r.cfg.FailureReply
 		}
 	}
@@ -334,6 +334,7 @@ func (r *Runner) deliver(ctx context.Context, t *turn.Turn, reply, errMsg string
 	}
 	if derr := r.cfg.Outbox.Send(ctx, Outbound{Channel: t.Channel, ChatID: t.ChatID, Text: reply, Session: t.Session, TurnID: t.ID, Source: t.Source}); derr != nil {
 		r.log.Error("runner : livraison impossible", "turn", t.ID, "channel", t.Channel, "err", derr)
+		t.Undelivered = derr.Error()
 		return strings.TrimSpace(errMsg + " ; livraison : " + derr.Error())
 	}
 	return errMsg

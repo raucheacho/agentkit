@@ -211,6 +211,18 @@ func TestFailureReply(t *testing.T) {
 	}
 }
 
+// Le nouvel essai d'un tour dont l'interlocuteur a déjà reçu le message
+// d'indisponibilité échoue sans le lui renvoyer.
+func TestNoFailureReplyOnRetry(t *testing.T) {
+	r, ob, _, _ := setup(t, &echo{fail: true}, nil)
+	tr := &turn.Turn{Channel: "tg", ChatID: "1", Content: "x", Meta: map[string]string{turn.MetaNoFailureReply: "true"}}
+	_ = r.Submit(context.Background(), tr)
+	waitFor(t, "échec", func() bool { return status(t, r, tr.ID) == turn.Failed })
+	if len(ob.texts()) != 0 {
+		t.Fatalf("livré : %v", ob.texts())
+	}
+}
+
 // Une livraison impossible est notée sur le tour.
 func TestDeliveryErrorIsRecorded(t *testing.T) {
 	r, ob, _, _ := setup(t, &echo{}, nil)

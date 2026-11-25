@@ -39,23 +39,23 @@ const (
 
 // Request est une demande adressée à un humain.
 type Request struct {
-	ID   string
-	Kind Kind
+	ID   string `json:"id"`
+	Kind Kind   `json:"kind"`
 	// Tool, Args et ArgsHash : l'action exacte à valider (KindApproval).
-	Tool     string
-	Args     json.RawMessage
-	ArgsHash string
+	Tool     string          `json:"tool,omitempty"`
+	Args     json.RawMessage `json:"args,omitempty"`
+	ArgsHash string          `json:"args_hash,omitempty"`
 	// Summary décrit l'action ou porte la question, pour l'humain.
-	Summary string
+	Summary string `json:"summary"`
 	// Conversation d'origine : où reprendre une fois la décision prise.
-	Conversation tool.Conversation
+	Conversation tool.Conversation `json:"conversation"`
 
-	Status    Status
-	Result    string // résultat de l'exécution, ou réponse à la question
-	DecidedBy string
-	CreatedAt time.Time
-	DecidedAt time.Time
-	ExpiresAt time.Time // zéro : n'expire pas
+	Status    Status    `json:"status"`
+	Result    string    `json:"result,omitempty"` // résultat de l'exécution, ou réponse à la question
+	DecidedBy string    `json:"decided_by,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	DecidedAt time.Time `json:"decided_at,omitzero"`
+	ExpiresAt time.Time `json:"expires_at,omitzero"` // zéro : n'expire pas
 }
 
 // HashArgs renvoie l'empreinte d'arguments JSON. Les arguments d'un appel

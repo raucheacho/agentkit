@@ -61,6 +61,8 @@ type Event struct {
 	Tool     string        `json:"tool,omitempty"`
 	Status   string        `json:"status,omitempty"`
 	Error    string        `json:"error,omitempty"`
+	// Undelivered (Finished) : la réponse n'a pas pu être livrée, et pourquoi.
+	Undelivered string `json:"undelivered,omitempty"`
 	// Text : extrait (réponse, résultat, demande), borné.
 	Text string            `json:"text,omitempty"`
 	Data map[string]string `json:"data,omitempty"`
@@ -231,7 +233,7 @@ func (b *Bus) Agent() func(ctx context.Context, ev agent.Event) {
 func (b *Bus) Runner() func(ctx context.Context, t *turn.Turn, out *agent.Outcome, err error) {
 	return func(_ context.Context, t *turn.Turn, out *agent.Outcome, err error) {
 		ev := Event{Kind: Finished, Session: t.Session, Channel: t.Channel, ChatID: t.ChatID, Source: string(t.Source),
-			Turn: t.ID, Status: string(t.Status), Text: t.Reply, Error: t.Error}
+			Turn: t.ID, Status: string(t.Status), Text: t.Reply, Error: t.Error, Undelivered: t.Undelivered}
 		if !t.StartedAt.IsZero() {
 			ev.Duration = time.Since(t.StartedAt)
 		}
