@@ -421,6 +421,36 @@ func TestInlineToolCall(t *testing.T) {
 	}
 }
 
+// Un appel d'outil écrit en texte mais illisible (cas réel : un accent mal
+// échappé, « ch\u00eques ») n'est jamais livré : le modèle reçoit l'erreur et
+// réessaie ; l'échange raté n'est pas enregistré.
+func TestMalformedInlineCallIsRetried(t *testing.T) {
+	runs := 0
+	bad := `{"name": "book", "parameters": {"date": "ch\u00eques"}}`
+	p := &scripted{replies: []llm.Message{text(bad), text(`{"name":"book","parameters":{"date":"jeudi"}}`), text("Réservé jeudi.")}}
+	a, st := newAgent(t, p, func(c *Config) { c.ParseInlineTools = true }, bookTool(&runs, tool.Read))
+	if out := send(t, a, "Jeudi", ""); runs != 1 || out.Reply != "Réservé jeudi." {
+		t.Fatalf("runs=%d reply=%q", runs, out.Reply)
+	}
+	for _, m := range history(st) {
+		if strings.Contains(m.Content, "u00eques") || strings.Contains(m.Content, "illisible") {
+			t.Fatalf("échange raté enregistré : %q", m.Content)
+		}
+	}
+}
+
+// S'il recommence, l'interlocuteur reçoit la réponse de secours, jamais le JSON.
+func TestMalformedInlineCallNeverDelivered(t *testing.T) {
+	runs := 0
+	bad := text(`{"name": "book", "parameters": {"date": "ch\u00eques"}}`)
+	p := &scripted{replies: []llm.Message{bad, bad, bad}}
+	a, _ := newAgent(t, p, func(c *Config) { c.ParseInlineTools = true }, bookTool(&runs, tool.Read))
+	out := send(t, a, "Jeudi", "")
+	if runs != 0 || out.Reply != DefaultTexts().Fallback {
+		t.Fatalf("runs=%d reply=%q", runs, out.Reply)
+	}
+}
+
 type streamer struct{ scripted }
 
 func (s *streamer) Stream(ctx context.Context, req *llm.Request) (<-chan llm.StreamEvent, error) {

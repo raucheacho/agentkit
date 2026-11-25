@@ -258,7 +258,7 @@ func (a *Agent) loop(ctx context.Context, t *turn) (*Outcome, error) {
 		llmTools = append(llmTools, llm.ToolSpec{Name: s.Name, Description: s.Description, Parameters: s.Parameters})
 	}
 
-	emptyRetried := false
+	emptyRetried, malformedRetried := false, false
 	for step := 0; step < a.cfg.MaxSteps; step++ {
 		resp, err := a.chat(ctx, t, llmTools)
 		if err != nil {
@@ -270,6 +270,21 @@ func (a *Agent) loop(ctx context.Context, t *turn) (*Outcome, error) {
 			if tc, ok := parseInlineToolCall(msg.Content, specs); ok {
 				calls, msg.Content = []llm.ToolCall{tc}, ""
 			}
+		}
+
+		// Un appel d'outil écrit en texte mais illisible (JSON invalide, outil
+		// inconnu) n'est jamais livré à l'interlocuteur : le modèle reçoit
+		// l'erreur et réessaie une fois, puis la réponse finale est forcée.
+		if len(calls) == 0 && looksLikeToolCall(msg.Content) {
+			a.log.Warn("agent : appel d'outil illisible écrit en texte", "session", t.conv.Session)
+			if malformedRetried || len(specs) == 0 {
+				break
+			}
+			malformedRetried = true
+			// Échange transitoire : vu par le modèle pour ce tour, jamais enregistré.
+			t.api = append(t.api, llm.Message{Role: llm.RoleAssistant, Content: msg.Content},
+				llm.Message{Role: llm.RoleUser, Content: a.cfg.Texts.MalformedCall})
+			continue
 		}
 
 		if len(calls) == 0 {
@@ -464,11 +479,19 @@ func (a *Agent) finalAnswer(ctx context.Context, t *turn) string {
 		a.log.Warn("agent : réponse finale impossible", "session", t.conv.Session, "err", err)
 		return a.cfg.Texts.Fallback
 	}
-	if text := cleanReply(resp.Message.Content); text != "" {
+	if text := cleanReply(resp.Message.Content); text != "" && !looksLikeToolCall(text) {
 		return text
 	}
 	return a.cfg.Texts.Fallback
 }
+
+// toolCallShape : un objet JSON qui commence par "name", éventuellement dans
+// un bloc de code — la forme d'un appel d'outil écrit en texte.
+var toolCallShape = regexp.MustCompile("^\\s*(?:```(?:json)?\\s*)?\\{\\s*\"name\"\\s*:")
+
+// looksLikeToolCall dit si un texte est un appel d'outil, lisible ou non :
+// ce n'est jamais une réponse pour l'interlocuteur.
+func looksLikeToolCall(s string) bool { return toolCallShape.MatchString(s) }
 
 func (a *Agent) emit(ctx context.Context, ev Event) {
 	if a.cfg.OnEvent != nil {

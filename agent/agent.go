@@ -48,6 +48,9 @@ type Texts struct {
 	FinalAnswer string
 	// Fallback est répondu si le modèle ne produit vraiment rien.
 	Fallback string
+	// MalformedCall est renvoyé au modèle quand il écrit en texte un appel
+	// d'outil illisible (JSON invalide, outil inconnu).
+	MalformedCall string
 	// Now formate la date pour la note éphémère (reçoit l'heure locale).
 	Now func(t time.Time) string
 	// Summarize est la consigne du résumé de compression ; SummaryHeading
@@ -67,6 +70,9 @@ func DefaultTexts() Texts {
 			"Réponds maintenant directement à ton interlocuteur : dis ce qui a réellement été fait " +
 			"et ce qui reste à faire. N'affirme rien qui n'a pas été fait par un outil.",
 		Fallback: "Je n'ai pas pu finaliser votre demande. Pouvez-vous la reformuler ou la préciser ?",
+		MalformedCall: "[Consigne interne] Ton dernier message est un appel d'outil illisible (JSON invalide ou outil " +
+			"inconnu) : il n'a pas été exécuté ni envoyé. Appelle l'outil correctement, ou réponds directement à " +
+			"ton interlocuteur.",
 		Now: func(t time.Time) string {
 			return "[Contexte] Nous sommes le " + t.Format("2006-01-02") + ", il est " + t.Format("15:04") + " (" + t.Location().String() + ")."
 		},
@@ -285,6 +291,9 @@ func New(cfg Config) *Agent {
 	}
 	if t.Fallback == "" {
 		t.Fallback = def.Fallback
+	}
+	if t.MalformedCall == "" {
+		t.MalformedCall = def.MalformedCall
 	}
 	if t.Now == nil {
 		t.Now = def.Now
